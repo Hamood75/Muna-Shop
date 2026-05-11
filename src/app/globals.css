@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f8f7;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #eef2f1;
+  --muted-foreground: #475569;
+  --border: #dce5e2;
+  --primary: #0d9488;
+  --primary-foreground: #f8fafc;
+  --accent: #14b8a6;
+  --highlight: #b8860b;
+  --destructive: #dc2626;
+  --ring: #0d9488;
+  --radius: 0.875rem;
+}
+
+.dark {
+  --background: #0a0e0d;
+  --foreground: #f1f5f9;
+  --card: #121816;
+  --card-foreground: #f1f5f9;
+  --muted: #1a2421;
+  --muted-foreground: #94a3b8;
+  --border: #243330;
+  --primary: #2dd4bf;
+  --primary-foreground: #042f2e;
+  --accent: #5eead4;
+  --highlight: #d4a72c;
+  --destructive: #f87171;
+  --ring: #2dd4bf;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-highlight: var(--highlight);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  min-height: 100vh;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      ellipse 130% 90% at 100% -30%,
+      color-mix(in oklab, var(--primary) 14%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 90% 70% at -10% 110%,
+      color-mix(in oklab, var(--highlight) 10%, transparent),
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 50% 120%,
+      color-mix(in oklab, var(--foreground) 4%, transparent),
+      transparent 45%
+    );
+  background-attachment: fixed;
 }
 
-body {
-  background: var(--background);
+.dark body {
+  background-image:
+    radial-gradient(
+      ellipse 130% 90% at 100% -25%,
+      color-mix(in oklab, var(--primary) 18%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 80% 60% at -15% 105%,
+      color-mix(in oklab, var(--highlight) 8%, transparent),
+      transparent 50%
+    );
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 35%, transparent);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

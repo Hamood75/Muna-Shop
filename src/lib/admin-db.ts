@@ -5,9 +5,12 @@ export function getAdminDb() {
   const appId =
     process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? process.env.INSTANT_APP_ID;
   const adminToken = process.env.INSTANT_APP_ADMIN_TOKEN;
-  if (!appId || !adminToken) {
+  if (!appId) {
+    throw new Error("Missing NEXT_PUBLIC_INSTANT_APP_ID (server sees no app id)");
+  }
+  if (!adminToken) {
     throw new Error(
-      "Missing NEXT_PUBLIC_INSTANT_APP_ID or INSTANT_APP_ADMIN_TOKEN",
+      "Missing INSTANT_APP_ADMIN_TOKEN — add it in Vercel → Settings → Environment Variables (Production), then redeploy",
     );
   }
   return init({

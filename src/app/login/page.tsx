@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { InstantAPIError } from "@instantdb/core";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -10,7 +11,7 @@ import {
   ShoppingBag,
   Store,
 } from "lucide-react";
-import { db } from "@/lib/db";
+import { INSTANT_APP_ID_CONFIGURED, db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+function instantAuthErrorMessage(err: unknown): string {
+  if (err instanceof InstantAPIError) {
+    const parts = [err.message];
+    if (err.hint != null) {
+      parts.push(
+        typeof err.hint === "string"
+          ? err.hint
+          : JSON.stringify(err.hint),
+      );
+    }
+    return parts.join(" — ");
+  }
+  if (err instanceof Error) return err.message;
+  return "Something went wrong";
+}
 
 function maskEmail(email: string): string {
   const trimmed = email.trim();
@@ -49,12 +66,18 @@ export default function LoginPage() {
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    if (!INSTANT_APP_ID_CONFIGURED) {
+      setFormError(
+        "Sign-in is not configured: set NEXT_PUBLIC_INSTANT_APP_ID to your Instant app id in the host environment (available at build time), then redeploy.",
+      );
+      return;
+    }
     setBusy(true);
     try {
       await db.auth.sendMagicCode({ email });
       setStep("code");
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Could not send code");
+      setFormError(instantAuthErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -68,7 +91,7 @@ export default function LoginPage() {
       await db.auth.signInWithMagicCode({ email, code });
       router.replace("/dashboard");
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Invalid code");
+      setFormError(instantAuthErrorMessage(err));
     } finally {
       setBusy(false);
     }

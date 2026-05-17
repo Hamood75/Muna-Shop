@@ -1,0 +1,14 @@
+/Users/apple/OTHER PROJECTS /Stock Shop/stock-shop/src-tauri/target/debug/deps/serde-1475f200765a2617.d: /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/apple/OTHER\ PROJECTS\ /Stock\ Shop/stock-shop/src-tauri/target/debug/build/serde-794e2c02a520af9a/out/private.rs
+
+/Users/apple/OTHER PROJECTS /Stock Shop/stock-shop/src-tauri/target/debug/deps/libserde-1475f200765a2617.rlib: /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/apple/OTHER\ PROJECTS\ /Stock\ Shop/stock-shop/src-tauri/target/debug/build/serde-794e2c02a520af9a/out/private.rs
+
+/Users/apple/OTHER PROJECTS /Stock Shop/stock-shop/src-tauri/target/debug/deps/libserde-1475f200765a2617.rmeta: /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/apple/OTHER\ PROJECTS\ /Stock\ Shop/stock-shop/src-tauri/target/debug/build/serde-794e2c02a520af9a/out/private.rs
+
+/Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/apple/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/apple/OTHER\ PROJECTS\ /Stock\ Shop/stock-shop/src-tauri/target/debug/build/serde-794e2c02a520af9a/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/apple/OTHER PROJECTS /Stock Shop/stock-shop/src-tauri/target/debug/build/serde-794e2c02a520af9a/out

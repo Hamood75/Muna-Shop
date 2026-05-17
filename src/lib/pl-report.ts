@@ -1,18 +1,17 @@
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Product, Sale, SaleItem, StockMovement } from "@/lib/entities";
 
-export type ProductPL = InstaQLEntity<AppSchema, "products">;
+export type ProductPL = Product;
 
-export type SaleItemPL = InstaQLEntity<AppSchema, "saleItems"> & {
-  product?: InstaQLEntity<AppSchema, "products"> | null;
+export type SaleItemPL = SaleItem & {
+  product?: Product | null;
 };
 
-export type SalePL = InstaQLEntity<AppSchema, "sales"> & {
+export type SalePL = Sale & {
   items?: SaleItemPL[];
 };
 
-export type StockMovementPL = InstaQLEntity<AppSchema, "stockMovements"> & {
-  product?: InstaQLEntity<AppSchema, "products"> | null;
+export type StockMovementPL = StockMovement & {
+  product?: Product | null;
 };
 
 /** Margin + damaged exposure for one SKU in a date window. */

@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarClock, Minus, Plus } from "lucide-react";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
-import { db } from "@/lib/db";
+import type { Product } from "@/lib/entities";
+import { useShopSession } from "@/context/shop-session";
 import {
   appendSyncHint,
   createInstallmentPlanClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import {
   BarcodeInput,
   normalizeScanInput,
@@ -24,8 +24,6 @@ import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
 
-type Product = InstaQLEntity<AppSchema, "products">;
-
 type Line = { product: Product; quantity: number };
 
 export function NewInstallmentPanel({ products }: { products: Product[] }) {
@@ -33,7 +31,8 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
   const [customerName, setCustomerName] = React.useState("");
   const [initialPayment, setInitialPayment] = React.useState("");
   const [notes, setNotes] = React.useState("");
-  const { user } = db.useAuth();
+  const { profile } = useShopSession();
+  const queryClient = useQueryClient();
 
   const mut = useMutation({
     mutationFn: (payload: {
@@ -41,20 +40,18 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
       items: { productId: string; quantity: number }[];
       notes?: string;
       initialPayment?: number;
-    }) => createInstallmentPlanClient(user?.id, payload, products),
+    }) => createInstallmentPlanClient(profile?.id, payload, products),
     onSuccess: (res) => {
       if (!res.ok) toast.error(res.error);
       else {
         toast.success(
-          appendSyncHint(
-            "Installment plan saved · stock updated",
-            res.syncStatus,
-          ),
+          appendSyncHint("Installment plan saved · stock updated"),
         );
         setLines([]);
         setCustomerName("");
         setInitialPayment("");
         setNotes("");
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });

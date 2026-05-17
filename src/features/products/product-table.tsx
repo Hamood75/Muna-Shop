@@ -1,17 +1,16 @@
 "use client";
 
-import * as React from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Product } from "@/lib/entities";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   appendSyncHint,
   deleteProductClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,8 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type Product = InstaQLEntity<AppSchema, "products">;
-
 export function ProductTable({
   products,
   onEdit,
@@ -35,11 +32,15 @@ export function ProductTable({
   products: Product[];
   onEdit: (p: Product) => void;
 }) {
+  const queryClient = useQueryClient();
   const del = useMutation({
     mutationFn: deleteProductClient,
     onSuccess: (res) => {
       if (!res.ok) toast.error(res.error);
-      else toast.success(appendSyncHint("Product deleted", res.syncStatus));
+      else {
+        toast.success(appendSyncHint("Product deleted"));
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
+      }
     },
   });
 

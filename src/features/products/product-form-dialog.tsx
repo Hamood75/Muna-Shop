@@ -3,10 +3,9 @@
 import * as React from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Product } from "@/lib/entities";
 import {
   productCreateSchema,
   productUpdateSchema,
@@ -16,7 +15,8 @@ import {
   appendSyncHint,
   createProductClient,
   updateProductClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Dialog,
   DialogContent,
@@ -27,8 +27,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-type Product = InstaQLEntity<AppSchema, "products">;
 
 type FormValues = z.infer<typeof productCreateSchema>;
 
@@ -41,6 +39,7 @@ export function ProductFormDialog({
   onOpenChange: (open: boolean) => void;
   editing?: Product | null;
 }) {
+  const queryClient = useQueryClient();
   const form = useForm<FormValues>({
     resolver: zodResolver(productCreateSchema) as Resolver<FormValues>,
     defaultValues: {
@@ -77,10 +76,9 @@ export function ProductFormDialog({
     onSuccess: async (res) => {
       if (!res.ok) toast.error(res.error);
       else {
-        toast.success(
-          appendSyncHint("Product created", res.syncStatus),
-        );
+        toast.success(appendSyncHint("Product created"));
         onOpenChange(false);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });
@@ -90,10 +88,9 @@ export function ProductFormDialog({
     onSuccess: async (res) => {
       if (!res.ok) toast.error(res.error);
       else {
-        toast.success(
-          appendSyncHint("Product updated", res.syncStatus),
-        );
+        toast.success(appendSyncHint("Product updated"));
         onOpenChange(false);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });

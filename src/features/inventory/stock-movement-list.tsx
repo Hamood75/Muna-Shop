@@ -2,19 +2,18 @@
 
 import type { ReactNode } from "react";
 import { format } from "date-fns";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { StockMovement } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type Movement = InstaQLEntity<AppSchema, "stockMovements"> & {
-  product?: InstaQLEntity<AppSchema, "products"> | null;
-};
+type Movement = StockMovement;
 
 const MOVEMENT_KIND_LABEL: Record<string, string> = {
   sale: "Sale",
   restock: "Restock",
   adjustment: "Adjustment",
   damaged: "Damaged",
+  installment: "Installment",
+  pay_later: "Pay later",
 };
 
 function formatMovementKind(kind: string) {

@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
-import { db } from "@/lib/db";
+import type { Product } from "@/lib/entities";
+import { useShopSession } from "@/context/shop-session";
 import {
   appendSyncHint,
   recordSaleClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import {
   BarcodeInput,
   normalizeScanInput,
@@ -23,24 +23,22 @@ import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
 
-type Product = InstaQLEntity<AppSchema, "products">;
-
 type Line = { product: Product; quantity: number };
 
 export function NewSalePanel({ products }: { products: Product[] }) {
   const [lines, setLines] = React.useState<Line[]>([]);
-  const { user } = db.useAuth();
+  const { profile } = useShopSession();
+  const queryClient = useQueryClient();
 
   const saleMut = useMutation({
     mutationFn: (payload: { items: { productId: string; quantity: number }[] }) =>
-      recordSaleClient(user?.id, payload, products),
+      recordSaleClient(profile?.id, payload, products),
     onSuccess: (res) => {
       if (!res.ok) toast.error(res.error);
       else {
-        toast.success(
-          appendSyncHint("Sale saved · stock updated", res.syncStatus),
-        );
+        toast.success(appendSyncHint("Sale saved · stock updated"));
         setLines([]);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });

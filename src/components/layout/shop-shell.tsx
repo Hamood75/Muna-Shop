@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { usePathname } from "next/navigation";
+import { useLocation } from "react-router-dom";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Header } from "@/components/layout/header";
-import { SyncStatusBanner } from "@/components/sync-status-banner";
+import { LocalDataBanner } from "@/components/local-data-banner";
 import { cn } from "@/lib/utils";
 
 const TITLES: Record<string, string> = {
@@ -18,14 +18,9 @@ const TITLES: Record<string, string> = {
   "/team": "Team",
 };
 
-export function ShopShell({
-  bootError,
-  children,
-}: {
-  bootError?: string;
-  children: React.ReactNode;
-}) {
-  const pathname = usePathname();
+export function ShopShell({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const pathname = location.pathname;
   const title = TITLES[pathname] ?? "Muna Shop";
 
   const [collapsed, setCollapsed] = React.useState(false);
@@ -67,16 +62,7 @@ export function ShopShell({
           onMobileNav={() => setMobileOpen(true)}
           mobileNavOpen={mobileOpen}
         />
-        <SyncStatusBanner />
-        {bootError ? (
-          <div className="border-b border-amber-500/35 bg-amber-500/[0.09] px-4 py-3 text-sm text-amber-950 dark:text-amber-50">
-            Profile sync issue: {bootError}. Ensure{" "}
-            <code className="rounded-md bg-background/60 px-1.5 py-0.5 font-mono text-xs">
-              INSTANT_APP_ADMIN_TOKEN
-            </code>{" "}
-            is set for server actions.
-          </div>
-        ) : null}
+        <LocalDataBanner />
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8 lg:px-10">
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>

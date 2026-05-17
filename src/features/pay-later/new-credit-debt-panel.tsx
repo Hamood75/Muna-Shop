@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Handshake, Minus, Plus } from "lucide-react";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
-import { db } from "@/lib/db";
+import type { Product } from "@/lib/entities";
+import { useShopSession } from "@/context/shop-session";
 import {
   appendSyncHint,
   createCreditDebtClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import {
   BarcodeInput,
   normalizeScanInput,
@@ -24,8 +24,6 @@ import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
 
-type Product = InstaQLEntity<AppSchema, "products">;
-
 export function NewCreditDebtPanel({ products }: { products: Product[] }) {
   const [product, setProduct] = React.useState<Product | null>(null);
   const [quantity, setQuantity] = React.useState(1);
@@ -33,7 +31,8 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
   const [totalOwedStr, setTotalOwedStr] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [totalManual, setTotalManual] = React.useState(false);
-  const { user } = db.useAuth();
+  const { profile } = useShopSession();
+  const queryClient = useQueryClient();
 
   const mut = useMutation({
     mutationFn: (payload: {
@@ -50,16 +49,13 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
           error: "Product not found",
         });
       }
-      return createCreditDebtClient(user?.id, payload, p);
+      return createCreditDebtClient(profile?.id, payload, p);
     },
     onSuccess: (res) => {
       if (!res.ok) toast.error(res.error);
       else {
         toast.success(
-          appendSyncHint(
-            "Pay-later sale saved · stock updated",
-            res.syncStatus,
-          ),
+          appendSyncHint("Pay-later sale saved · stock updated"),
         );
         setProduct(null);
         setQuantity(1);
@@ -67,6 +63,7 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
         setTotalOwedStr("");
         setNotes("");
         setTotalManual(false);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });

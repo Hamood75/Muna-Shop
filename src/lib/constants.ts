@@ -5,7 +5,7 @@ export function isLowStock(onHand: number): boolean {
   return onHand <= LOW_STOCK_THRESHOLD;
 }
 
-/** InstantDB query page size for catalog lists */
+/** Catalog list page size */
 export const PRODUCTS_PAGE_SIZE = 10;
 
 /** Recent stock movements list page size */
@@ -21,6 +21,11 @@ export const ROLES = {
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
+
+/** Admin-only areas (reports, etc.); super admin is included. */
+export function isAdminRole(role: string | undefined): boolean {
+  return role === ROLES.admin || role === ROLES.super_admin;
+}
 
 export const INSTALLMENT_STATUS = {
   active: "active",

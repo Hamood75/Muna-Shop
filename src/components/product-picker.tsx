@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { ChevronsUpDown } from "lucide-react";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Product } from "@/lib/entities";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,8 +18,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
-type Product = InstaQLEntity<AppSchema, "products">;
 
 export type ProductPickerProps = {
   products: Product[];

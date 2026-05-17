@@ -1,26 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { InstallmentPlan } from "@/lib/entities";
 import {
   appendSyncHint,
   recordInstallmentPaymentClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import { INSTALLMENT_STATUS } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-type Plan = InstaQLEntity<AppSchema, "installmentPlans"> & {
-  items?: (InstaQLEntity<AppSchema, "installmentItems"> & {
-    product?: InstaQLEntity<AppSchema, "products"> | null;
-  })[];
-};
+type Plan = InstallmentPlan;
 
 export function InstallmentPlansList({ plans }: { plans: Plan[] }) {
   const [filter, setFilter] = React.useState<"active" | "all">("active");
@@ -76,16 +72,16 @@ export function InstallmentPlansList({ plans }: { plans: Plan[] }) {
 
 function PlanRow({ plan }: { plan: Plan }) {
   const [amount, setAmount] = React.useState("");
+  const queryClient = useQueryClient();
   const payMut = useMutation({
     mutationFn: (payload: { planId: string; amount: number }) =>
       recordInstallmentPaymentClient(payload, plan),
     onSuccess: (res) => {
       if (!res.ok) toast.error(res.error);
       else {
-        toast.success(
-          appendSyncHint("Payment recorded", res.syncStatus),
-        );
+        toast.success(appendSyncHint("Payment recorded"));
         setAmount("");
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });

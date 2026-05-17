@@ -2,17 +2,9 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Sale } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMoney } from "@/lib/format-money";
-
-type Sale = InstaQLEntity<AppSchema, "sales"> & {
-  creator?: InstaQLEntity<AppSchema, "$users"> | null;
-  items?: (InstaQLEntity<AppSchema, "saleItems"> & {
-    product?: InstaQLEntity<AppSchema, "products"> | null;
-  })[];
-};
 
 export function SalesHistory({ sales }: { sales: Sale[] }) {
   const [filter, setFilter] = React.useState<"7d" | "30d" | "all">("7d");

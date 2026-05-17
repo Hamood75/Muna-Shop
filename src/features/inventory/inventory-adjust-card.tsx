@@ -1,22 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Product } from "@/lib/entities";
 import {
   appendSyncHint,
   adjustStockClient,
-} from "@/lib/client-db-write";
+} from "@/lib/write";
+import { queryKeys } from "@/lib/query-keys";
 import { isLowStock, LOW_STOCK_THRESHOLD } from "@/lib/constants";
 import { ProductPicker } from "@/components/product-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-type Product = InstaQLEntity<AppSchema, "products">;
 
 type AdjustKind = "restock" | "adjustment" | "damaged";
 
@@ -29,6 +27,8 @@ export function InventoryAdjustCard({ products }: { products: Product[] }) {
   React.useEffect(() => {
     if (!productId && products[0]?.id) setProductId(products[0].id);
   }, [products, productId]);
+
+  const queryClient = useQueryClient();
 
   const mut = useMutation({
     mutationFn: (payload: {
@@ -49,8 +49,9 @@ export function InventoryAdjustCard({ products }: { products: Product[] }) {
     onSuccess: (res) => {
       if (!res.ok) toast.error(res.error);
       else {
-        toast.success(appendSyncHint("Stock updated", res.syncStatus));
+        toast.success(appendSyncHint("Stock updated"));
         setNote("");
+        void queryClient.invalidateQueries({ queryKey: queryKeys.root });
       }
     },
   });

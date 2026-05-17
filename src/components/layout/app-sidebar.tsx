@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Package,
@@ -19,17 +18,22 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { db } from "@/lib/db";
-import { ROLES } from "@/lib/constants";
+import { isAdminRole, ROLES } from "@/lib/constants";
+import { useShopSession } from "@/context/shop-session";
 
-const nav = [
+const nav: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+}[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Products", icon: Package },
   { href: "/sales", label: "Sales", icon: ShoppingCart },
   { href: "/installments", label: "Installments", icon: CalendarClock },
   { href: "/pay-later", label: "Pay later", icon: Handshake },
   { href: "/inventory", label: "Inventory", icon: Warehouse },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/reports", label: "Reports", icon: BarChart3, adminOnly: true },
 ];
 
 export function AppSidebar({
@@ -43,7 +47,11 @@ export function AppSidebar({
   showCollapse?: boolean;
   onNavClick?: () => void;
 }) {
-  const pathname = usePathname();
+  const pathname = useLocation().pathname;
+  const { profile } = useShopSession();
+  const visibleNav = nav.filter(
+    (item) => !item.adminOnly || isAdminRole(profile?.role),
+  );
 
   return (
     <aside
@@ -99,16 +107,16 @@ export function AppSidebar({
       </div>
       <Separator className="opacity-80" />
       <nav className="flex flex-1 flex-col gap-0.5 p-3">
-        {nav.map((item) => {
+        {visibleNav.map((item) => {
           const Icon = item.icon;
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
-              href={item.href}
+              to={item.href}
               onClick={() => onNavClick?.()}
-              className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card rounded-lg"
+              className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             >
               <span
                 className={cn(
@@ -164,18 +172,8 @@ function SuperAdminTeamNavLink({
   pathname: string;
   onNavClick?: () => void;
 }) {
-  const { user } = db.useAuth();
-  const { data } = db.useQuery(
-    user?.id
-      ? {
-          profiles: {
-            $: { where: { "user.id": user.id } },
-          },
-        }
-      : null,
-  );
-  const role = data?.profiles?.[0]?.role;
-  if (role !== ROLES.super_admin) return null;
+  const { profile } = useShopSession();
+  if (profile?.role !== ROLES.super_admin) return null;
 
   const href = "/team";
   const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -183,9 +181,9 @@ function SuperAdminTeamNavLink({
 
   return (
     <Link
-      href={href}
+      to={href}
       onClick={() => onNavClick?.()}
-      className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card rounded-lg"
+      className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
     >
       <span
         className={cn(

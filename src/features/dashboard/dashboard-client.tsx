@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { startOfDay, startOfMonth, startOfWeek } from "date-fns";
-import type { InstaQLEntity } from "@instantdb/react";
-import type { AppSchema } from "@/instant.schema";
+import type { Product, Sale, StockMovement, SaleItem } from "@/lib/entities";
 import {
   AlertTriangle,
   CalendarDays,
@@ -25,17 +24,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-type Product = InstaQLEntity<AppSchema, "products">;
-type SaleItem = InstaQLEntity<AppSchema, "saleItems"> & {
-  product?: InstaQLEntity<AppSchema, "products"> | null;
+type SaleRow = Sale & {
+  items?: (SaleItem & { product?: Product | null })[];
 };
 
-type Sale = InstaQLEntity<AppSchema, "sales"> & {
-  items?: SaleItem[];
-};
-
-type StockMovement = InstaQLEntity<AppSchema, "stockMovements"> & {
-  product?: InstaQLEntity<AppSchema, "products"> | null;
+type MovementRow = StockMovement & {
+  product?: Product | null;
 };
 
 export function DashboardClient({
@@ -44,8 +38,8 @@ export function DashboardClient({
   stockMovements,
 }: {
   products: Product[];
-  sales: Sale[];
-  stockMovements: StockMovement[];
+  sales: SaleRow[];
+  stockMovements: MovementRow[];
 }) {
   const [recentSalesPage, setRecentSalesPage] = React.useState(0);
 

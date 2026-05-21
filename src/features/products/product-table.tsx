@@ -60,7 +60,7 @@ export function ProductTable({
                 Barcode
               </th>
               <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Cost / unit
+                Buy
               </th>
               <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Sell

@@ -1,5 +1,6 @@
 import path from "node:path";
 import react from "@vitejs/plugin-react";
+import cssInjectedByJsPlugin from "vite-plugin-css-injected-by-js";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 
@@ -26,7 +27,11 @@ function stripIndexHtmlCrossOrigin(): Plugin {
 
 export default defineConfig(async () => ({
   base,
-  plugins: [react(), stripIndexHtmlCrossOrigin()],
+  plugins: [
+    react(),
+    cssInjectedByJsPlugin(),
+    stripIndexHtmlCrossOrigin(),
+  ],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },

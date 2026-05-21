@@ -4,7 +4,11 @@ import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
+// Tauri serves the production bundle from a custom URL; `/assets/...` must be relative or CSS/JS will not load in the packaged app.
+const base = "./";
+
 export default defineConfig(async () => ({
+  base,
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },

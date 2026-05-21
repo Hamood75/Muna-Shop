@@ -1,6 +1,7 @@
 import Database from "@tauri-apps/plugin-sql";
 import { ROLES } from "@/lib/constants";
 import { ensureSuperAdminPasscodeDefaults } from "@/lib/admin-passcode";
+import { randomUuid } from "@/lib/random-id";
 
 const DB_FILE = "sqlite:muna-shop.db";
 
@@ -131,7 +132,7 @@ async function seedDefaultProfile(db: Database) {
   const n = rows[0]?.n ?? 0;
   if (n > 0) return;
 
-  const id = crypto.randomUUID();
+  const id = randomUuid();
   const now = Date.now();
   await db.execute(
     "INSERT INTO profiles (id, role, display_name, created_at) VALUES (?, ?, ?, ?)",

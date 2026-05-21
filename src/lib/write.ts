@@ -18,6 +18,7 @@ import {
   recordInstallmentPaymentSchema,
 } from "@/lib/validations/credit";
 import { getDb } from "@/lib/sqlite-db";
+import { randomUuid } from "@/lib/random-id";
 
 export type ClientTransactResult<T = void> =
   | { ok: true; data?: T }
@@ -104,7 +105,7 @@ export async function recordSaleClient(
   }
 
   const db = await getDb();
-  const saleId = crypto.randomUUID();
+  const saleId = randomUuid();
   const now = Date.now();
 
   try {
@@ -122,7 +123,7 @@ export async function recordSaleClient(
     );
 
     for (const line of lineMeta) {
-      const saleItemId = crypto.randomUUID();
+      const saleItemId = randomUuid();
       await db.execute(
         `INSERT INTO sale_items (id, sale_id, product_id, quantity, unit_price, line_total)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -140,7 +141,7 @@ export async function recordSaleClient(
         [line.nextStock, line.productId],
       );
 
-      const movId = crypto.randomUUID();
+      const movId = randomUuid();
       await db.execute(
         `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -187,7 +188,7 @@ export async function adjustStockClient(
   }
 
   const db = await getDb();
-  const movId = crypto.randomUUID();
+  const movId = randomUuid();
   const now = Date.now();
 
   try {
@@ -228,7 +229,7 @@ export async function createProductClient(
     return { ok: false, error: zodFirstIssue(parsed.error) };
   }
   const data = parsed.data;
-  const pid = crypto.randomUUID();
+  const pid = randomUuid();
   const db = await getDb();
   const now = Date.now();
 
@@ -402,7 +403,7 @@ export async function createInstallmentPlanClient(
   }
 
   const initial = Math.min(data.initialPayment ?? 0, totalAmount);
-  const planId = crypto.randomUUID();
+  const planId = randomUuid();
   const now = Date.now();
   const status =
     initial >= totalAmount
@@ -429,7 +430,7 @@ export async function createInstallmentPlanClient(
     );
 
     for (const line of lineMeta) {
-      const itemId = crypto.randomUUID();
+      const itemId = randomUuid();
       await db.execute(
         `INSERT INTO installment_items (id, plan_id, product_id, quantity, unit_price, line_total)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -447,7 +448,7 @@ export async function createInstallmentPlanClient(
         [line.nextStock, line.productId],
       );
 
-      const movId = crypto.randomUUID();
+      const movId = randomUuid();
       await db.execute(
         `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -549,8 +550,8 @@ export async function createCreditDebtClient(
   const defaultTotal = unitPriceAtSale * data.quantity;
   const totalOwed = data.totalOwed ?? defaultTotal;
 
-  const debtId = crypto.randomUUID();
-  const movId = crypto.randomUUID();
+  const debtId = randomUuid();
+  const movId = randomUuid();
   const now = Date.now();
   const nextStock = product.stockQuantity - data.quantity;
 
@@ -657,7 +658,7 @@ export async function addTeamProfile(
   const name = displayName.trim();
   if (!name) return { ok: false, error: "Display name required" };
   const db = await getDb();
-  const id = crypto.randomUUID();
+  const id = randomUuid();
   try {
     await db.execute(
       `INSERT INTO profiles (id, role, display_name, created_at) VALUES (?, ?, ?, ?)`,

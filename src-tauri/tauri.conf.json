@@ -17,18 +17,12 @@
         "width": 1280,
         "height": 840,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "devtools": true
       }
     ],
     "security": {
-      "csp": {
-        "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost https://ipc.localhost http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
-        "img-src": "'self' asset: http://asset.localhost blob: data:",
-        "style-src": "'unsafe-inline' 'self'",
-        "script-src": "'self'",
-        "font-src": "'self' data:"
-      },
+      "csp": "default-src 'self' asset: customprotocol: ipc: data: blob:; connect-src ipc: https://ipc.localhost http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost; font-src 'self' data: blob:; style-src 'self' 'unsafe-inline' blob: data: asset: http: https:; script-src 'self' blob: asset: 'unsafe-eval' http: https:; worker-src blob:;",
       "dangerousDisableAssetCspModification": true
     }
   },

@@ -1,12 +1,68 @@
 import { z } from "zod";
 
+/** Stored on each product: average cost per unit (used for profit / P&L). */
 export const productCreateSchema = z.object({
   name: z.string().min(1),
   barcode: z.string().optional(),
   buyingPrice: z.coerce.number().nonnegative(),
   sellingPrice: z.coerce.number().nonnegative(),
-  stockQuantity: z.coerce.number().int().nonnegative(),
+  stockQuantity: z.coerce.number().nonnegative(),
 });
+
+/**
+ * Create form: user enters wholesale lot total and how many units were in the lot;
+ * we derive per-unit cost as total ÷ units. Opening stock is usually the same count.
+ */
+export const productCreateFormSchema = z
+  .object({
+    name: z.string().min(1),
+    barcode: z.string().optional(),
+    wholesaleLotTotal: z.coerce.number(),
+    unitsPurchased: z.coerce.number(),
+    openingStock: z.coerce.number(),
+    sellingPrice: z.coerce.number().nonnegative(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.wholesaleLotTotal <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the total you paid for the wholesale pack",
+        path: ["wholesaleLotTotal"],
+      });
+    }
+    if (data.unitsPurchased <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Units in the purchase must be greater than zero",
+        path: ["unitsPurchased"],
+      });
+    }
+    if (data.openingStock < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Opening stock cannot be negative",
+        path: ["openingStock"],
+      });
+    }
+    if (data.openingStock > data.unitsPurchased) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Opening stock cannot be more than the units you purchased (unless you use stock adjustment later)",
+        path: ["openingStock"],
+      });
+    }
+  })
+  .transform((data) => {
+    const raw = data.wholesaleLotTotal / data.unitsPurchased;
+    const buyingPrice = Math.round(raw * 10000) / 10000;
+    return {
+      name: data.name.trim(),
+      barcode: data.barcode?.trim() || undefined,
+      buyingPrice,
+      sellingPrice: data.sellingPrice,
+      stockQuantity: data.openingStock,
+    };
+  });
 
 export const productUpdateSchema = productCreateSchema.partial().extend({
   id: z.string().min(1),

@@ -64,6 +64,53 @@ export const productCreateFormSchema = z
     };
   });
 
+/**
+ * Edit product: same wholesale inputs as create; stock is current on-hand qty (not tied to units purchased).
+ */
+export const productEditFormSchema = z
+  .object({
+    name: z.string().min(1),
+    barcode: z.string().optional(),
+    wholesaleLotTotal: z.coerce.number(),
+    unitsPurchased: z.coerce.number(),
+    stockQuantity: z.coerce.number(),
+    sellingPrice: z.coerce.number().nonnegative(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.wholesaleLotTotal <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the total you paid for the wholesale pack",
+        path: ["wholesaleLotTotal"],
+      });
+    }
+    if (data.unitsPurchased <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Units in the purchase must be greater than zero",
+        path: ["unitsPurchased"],
+      });
+    }
+    if (data.stockQuantity < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Stock quantity cannot be negative",
+        path: ["stockQuantity"],
+      });
+    }
+  })
+  .transform((data) => {
+    const raw = data.wholesaleLotTotal / data.unitsPurchased;
+    const buyingPrice = Math.round(raw * 10000) / 10000;
+    return {
+      name: data.name.trim(),
+      barcode: data.barcode?.trim() || undefined,
+      buyingPrice,
+      sellingPrice: data.sellingPrice,
+      stockQuantity: data.stockQuantity,
+    };
+  });
+
 export const productUpdateSchema = productCreateSchema.partial().extend({
   id: z.string().min(1),
 });

@@ -22,6 +22,8 @@ type Props = {
   /** Max ms from first to last key in a burst to count as scanner-like (default 280). */
   wedgeBurstMaxMs?: number;
   onScan: (code: string) => void;
+  /** Fired whenever the visible input changes (helps build search-as-you-type UX). */
+  onTypingChange?: (rawValue: string) => void;
 };
 
 /**
@@ -38,6 +40,7 @@ export function BarcodeInput({
   minScanLength = 4,
   wedgeIdleMs = 55,
   wedgeBurstMaxMs = 280,
+  onTypingChange,
   onScan,
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -76,6 +79,7 @@ export function BarcodeInput({
       if (span <= wedgeBurstMaxMs) {
         onScan(code);
         el.value = "";
+        onTypingChange?.("");
         burstFirstRef.current = 0;
         burstLastRef.current = 0;
         queueMicrotask(() => inputRef.current?.focus());
@@ -93,6 +97,7 @@ export function BarcodeInput({
       if (code) {
         onScan(code);
         e.currentTarget.value = "";
+        onTypingChange?.("");
         queueMicrotask(() => inputRef.current?.focus());
       }
       return;
@@ -137,6 +142,7 @@ export function BarcodeInput({
         className="font-mono text-lg tracking-wide"
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
+        onChange={(e) => onTypingChange?.(e.target.value)}
       />
     </div>
   );

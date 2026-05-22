@@ -11,10 +11,7 @@ import {
   createCreditDebtClient,
 } from "@/lib/write";
 import { queryKeys } from "@/lib/query-keys";
-import {
-  BarcodeInput,
-  normalizeScanInput,
-} from "@/components/barcode-input";
+import { ProductScanCombo } from "@/components/product-scan-combo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,17 +65,6 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
     },
   });
 
-  const byBarcode = React.useMemo(() => {
-    const m = new Map<string, Product>();
-    for (const p of products) {
-      const raw = p.barcode?.trim();
-      if (!raw) continue;
-      m.set(raw, p);
-      m.set(raw.toLowerCase(), p);
-    }
-    return m;
-  }, [products]);
-
   const defaultTotal =
     product != null ? product.sellingPrice * quantity : null;
 
@@ -98,34 +84,6 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
     toast.message(`Product · ${p.name}`, { duration: 1200 });
   }
 
-  function handleScan(rawCode: string) {
-    const code = normalizeScanInput(rawCode);
-    if (!code) return;
-
-    let direct = byBarcode.get(code) ?? byBarcode.get(code.toLowerCase());
-    if (!direct && /^\d+$/.test(code)) {
-      const stripped = code.replace(/^0+/, "") || "0";
-      direct =
-        byBarcode.get(stripped) ??
-        byBarcode.get(stripped.toLowerCase()) ??
-        byBarcode.get(code.padStart(13, "0")) ??
-        byBarcode.get(code.padStart(12, "0"));
-    }
-    if (direct) {
-      pickProduct(direct);
-      return;
-    }
-
-    const term = code.toLowerCase();
-    const match = products.find(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        (p.barcode?.toLowerCase().includes(term) ?? false),
-    );
-    if (match) pickProduct(match);
-    else toast.error("No product matches this barcode");
-  }
-
   function submit() {
     const name = customerName.trim();
     if (!name) {
@@ -133,7 +91,7 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
       return;
     }
     if (!product) {
-      toast.error("Choose a product (scan barcode)");
+      toast.error("Choose a product (scan or search above)");
       return;
     }
     if (quantity < 1) {
@@ -191,10 +149,12 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
           </div>
         </div>
 
-        <BarcodeInput
-          onScan={handleScan}
-          label="Scan product"
-          placeholder="Scan one product — replaces selection"
+        <ProductScanCombo
+          products={products}
+          onPick={(p) => pickProduct(p)}
+          id="credit-scan"
+          label="Product"
+          placeholder="Scan or type part of product name — choose from list"
         />
         <Separator />
 

@@ -11,10 +11,7 @@ import {
   createInstallmentPlanClient,
 } from "@/lib/write";
 import { queryKeys } from "@/lib/query-keys";
-import {
-  BarcodeInput,
-  normalizeScanInput,
-} from "@/components/barcode-input";
+import { ProductScanCombo } from "@/components/product-scan-combo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,18 +53,7 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
     },
   });
 
-  const byBarcode = React.useMemo(() => {
-    const m = new Map<string, Product>();
-    for (const p of products) {
-      const raw = p.barcode?.trim();
-      if (!raw) continue;
-      m.set(raw, p);
-      m.set(raw.toLowerCase(), p);
-    }
-    return m;
-  }, [products]);
-
-  function addProduct(product: Product, qty = 1) {
+  function addProduct(product: Product, qty: number) {
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.product.id === product.id);
       if (idx === -1) return [...prev, { product, quantity: qty }];
@@ -79,34 +65,6 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
       return next;
     });
     toast.message(`Added ${product.name}`, { duration: 1200 });
-  }
-
-  function handleScan(rawCode: string) {
-    const code = normalizeScanInput(rawCode);
-    if (!code) return;
-
-    let direct = byBarcode.get(code) ?? byBarcode.get(code.toLowerCase());
-    if (!direct && /^\d+$/.test(code)) {
-      const stripped = code.replace(/^0+/, "") || "0";
-      direct =
-        byBarcode.get(stripped) ??
-        byBarcode.get(stripped.toLowerCase()) ??
-        byBarcode.get(code.padStart(13, "0")) ??
-        byBarcode.get(code.padStart(12, "0"));
-    }
-    if (direct) {
-      addProduct(direct, 1);
-      return;
-    }
-
-    const term = code.toLowerCase();
-    const match = products.find(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        (p.barcode?.toLowerCase().includes(term) ?? false),
-    );
-    if (match) addProduct(match, 1);
-    else toast.error("No product matches this barcode");
   }
 
   function setQty(productId: string, quantity: number) {
@@ -182,11 +140,13 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
         </div>
 
         <div className="space-y-4">
-          <BarcodeInput
+          <ProductScanCombo
+            products={products}
+            onPick={(p) => addProduct(p, 1)}
             autoFocus={false}
-            onScan={handleScan}
+            id="inst-scan"
             label="Products"
-            placeholder="Scan barcode — or type and press Enter"
+            placeholder="Scan barcode — type part of name — pick from dropdown or Enter when one match"
           />
           <Separator />
 

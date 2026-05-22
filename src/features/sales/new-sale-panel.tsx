@@ -11,10 +11,7 @@ import {
   recordSaleClient,
 } from "@/lib/write";
 import { queryKeys } from "@/lib/query-keys";
-import {
-  BarcodeInput,
-  normalizeScanInput,
-} from "@/components/barcode-input";
+import { ProductScanCombo } from "@/components/product-scan-combo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,17 +40,6 @@ export function NewSalePanel({ products }: { products: Product[] }) {
     },
   });
 
-  const byBarcode = React.useMemo(() => {
-    const m = new Map<string, Product>();
-    for (const p of products) {
-      const raw = p.barcode?.trim();
-      if (!raw) continue;
-      m.set(raw, p);
-      m.set(raw.toLowerCase(), p);
-    }
-    return m;
-  }, [products]);
-
   function addProduct(product: Product, qty = 1) {
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.product.id === product.id);
@@ -66,34 +52,6 @@ export function NewSalePanel({ products }: { products: Product[] }) {
       return next;
     });
     toast.message(`Added ${product.name}`, { duration: 1200 });
-  }
-
-  function handleScan(rawCode: string) {
-    const code = normalizeScanInput(rawCode);
-    if (!code) return;
-
-    let direct = byBarcode.get(code) ?? byBarcode.get(code.toLowerCase());
-    if (!direct && /^\d+$/.test(code)) {
-      const stripped = code.replace(/^0+/, "") || "0";
-      direct =
-        byBarcode.get(stripped) ??
-        byBarcode.get(stripped.toLowerCase()) ??
-        byBarcode.get(code.padStart(13, "0")) ??
-        byBarcode.get(code.padStart(12, "0"));
-    }
-    if (direct) {
-      addProduct(direct, 1);
-      return;
-    }
-
-    const term = code.toLowerCase();
-    const match = products.find(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        (p.barcode?.toLowerCase().includes(term) ?? false),
-    );
-    if (match) addProduct(match, 1);
-    else toast.error("No product matches this barcode");
   }
 
   function setQty(productId: string, quantity: number) {
@@ -135,17 +93,19 @@ export function NewSalePanel({ products }: { products: Product[] }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <BarcodeInput
+        <ProductScanCombo
+          products={products}
+          onPick={(p) => addProduct(p, 1)}
           autoFocus
-          onScan={handleScan}
-          label="Scan or search"
-          placeholder="Point scanner here — item adds automatically — or type and press Enter"
+          id="sale-scan"
+          label="Scan or search by name"
+          placeholder="Barcode scanner — type part of name — dropdown appears — pick row or Enter if one match"
         />
         <Separator />
 
         {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Cart is empty — scan a barcode to begin.
+            Cart is empty — scan or search above to begin.
           </p>
         ) : (
           <ul className="space-y-4">

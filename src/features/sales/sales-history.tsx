@@ -2,12 +2,21 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import type { Sale } from "@/lib/entities";
+import type { Product, Sale } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format-money";
+import { EditSaleDialog } from "@/features/sales/edit-sale-dialog";
 
-export function SalesHistory({ sales }: { sales: Sale[] }) {
+export function SalesHistory({
+  sales,
+  products,
+}: {
+  sales: Sale[];
+  products: Product[];
+}) {
   const [filter, setFilter] = React.useState<"7d" | "30d" | "all">("7d");
+  const [editSale, setEditSale] = React.useState<Sale | null>(null);
 
   const filtered = React.useMemo(() => {
     const now = Date.now();
@@ -24,6 +33,14 @@ export function SalesHistory({ sales }: { sales: Sale[] }) {
 
   return (
     <Card>
+      <EditSaleDialog
+        sale={editSale}
+        products={products}
+        open={editSale != null}
+        onOpenChange={(open) => {
+          if (!open) setEditSale(null);
+        }}
+      />
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="text-lg">Sales history</CardTitle>
         <div className="flex gap-2">
@@ -59,12 +76,23 @@ export function SalesHistory({ sales }: { sales: Sale[] }) {
                 key={sale.id}
                 className="rounded-xl border border-border bg-muted/30 p-4"
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="text-sm font-semibold tabular-nums">
                     {formatMoney(sale.totalAmount)}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {format(new Date(sale.createdAt), "PPpp")}
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditSale(sale)}
+                      className="min-h-9 cursor-pointer"
+                    >
+                      Edit
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                      {format(new Date(sale.createdAt), "PPpp")}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">

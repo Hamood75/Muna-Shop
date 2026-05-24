@@ -31,9 +31,10 @@ function resolveSaleLineProduct(
   item: SaleItemPL,
   catalog: ProductPL[],
 ): ProductPL | undefined {
-  const pid = item.product?.id;
+  const pid = item.productId ?? item.product?.id;
   return (
-    item.product ?? (pid ? catalog.find((x) => x.id === pid) : undefined)
+    item.product ??
+    (pid ? catalog.find((x) => x.id === pid) : undefined)
   );
 }
 

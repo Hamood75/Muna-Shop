@@ -22,6 +22,12 @@ export const recordSaleSchema = z.object({
   note: z.string().optional(),
 });
 
+export const updateSaleSchema = z.object({
+  saleId: z.string().min(1),
+  items: z.array(saleLineSchema).min(1),
+  note: z.string().optional(),
+});
+
 export const stockAdjustSchema = z
   .object({
     productId: z.string().min(1),

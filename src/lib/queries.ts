@@ -177,6 +177,7 @@ export async function fetchSalesBundle(): Promise<Sale[]> {
   for (const i of itemRows) {
     const item: SaleItem = {
       id: i.id,
+      productId: i.product_id,
       quantity: i.quantity,
       unitPrice: i.unit_price,
       lineTotal: i.line_total,

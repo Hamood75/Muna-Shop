@@ -43,7 +43,7 @@ export function SalesPage() {
         <NewSalePanel products={data?.products ?? []} />
       </TabsContent>
       <TabsContent value="history">
-        <SalesHistory sales={data?.sales ?? []} />
+        <SalesHistory sales={data?.sales ?? []} products={data?.products ?? []} />
       </TabsContent>
     </Tabs>
   );

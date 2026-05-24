@@ -29,6 +29,8 @@ export type Sale = {
 
 export type SaleItem = {
   id: string;
+  /** Present when loaded from SQLite; lets history edits find the SKU if join data is stale. */
+  productId?: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;

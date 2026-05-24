@@ -10,6 +10,7 @@ import {
   productUpdateSchema,
   recordSaleSchema,
   stockAdjustSchema,
+  updateSaleSchema,
 } from "@/lib/validations/inventory";
 import {
   createCreditDebtSchema,
@@ -156,6 +157,254 @@ export async function recordSaleClient(
         ],
       );
     }
+    await db.execute("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: sqlErr(e) };
+  }
+}
+
+/**
+ * Rewrite an existing POS sale’s lines from history: restores old stock moves,
+ * then applies the corrected lines using current catalogue prices from SQLite.
+ */
+export async function updateSaleClient(
+  profileId: string | undefined,
+  input: unknown,
+): Promise<ClientTransactResult> {
+  if (!profileId) {
+    return { ok: false, error: "No active profile" };
+  }
+
+  const parsed = updateSaleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: zodFirstIssue(parsed.error) };
+  }
+  const { saleId, items, note } = parsed.data;
+
+  const db = await getDb();
+  const now = Date.now();
+
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const saleRow = await db.select<{ id: string }[]>(
+      "SELECT id FROM sales WHERE id = ? LIMIT 1",
+      [saleId],
+    );
+    if (!saleRow.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Sale not found" };
+    }
+
+    type OldRow = { product_id: string; quantity: number };
+    const oldItems = await db.select<OldRow[]>(
+      "SELECT product_id, quantity FROM sale_items WHERE sale_id = ?",
+      [saleId],
+    );
+
+    const oldQtyByProduct = new Map<string, number>();
+    for (const row of oldItems) {
+      oldQtyByProduct.set(
+        row.product_id,
+        (oldQtyByProduct.get(row.product_id) ?? 0) + row.quantity,
+      );
+    }
+
+    const newProductIds = [...new Set(items.map((i) => i.productId))];
+    const allProductIds = [
+      ...new Set([...oldQtyByProduct.keys(), ...newProductIds]),
+    ];
+    if (!allProductIds.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "No products in sale" };
+    }
+
+    type StockRow = {
+      id: string;
+      selling_price: number;
+      stock_quantity: number;
+    };
+    const phAll = allProductIds.map(() => "?").join(",");
+    const stockRows = await db.select<StockRow[]>(
+      `SELECT id, selling_price, stock_quantity FROM products WHERE id IN (${phAll})`,
+      allProductIds,
+    );
+    if (stockRows.length !== allProductIds.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "One or more products no longer exist" };
+    }
+
+    const productRow = new Map(stockRows.map((r) => [r.id, r]));
+
+    const running = new Map<string, number>();
+    for (const pid of newProductIds) {
+      const row = productRow.get(pid)!;
+      const returned = oldQtyByProduct.get(pid) ?? 0;
+      running.set(pid, row.stock_quantity + returned);
+    }
+
+    let totalAmount = 0;
+    const lineMeta: {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      nextStock: number;
+    }[] = [];
+
+    for (const line of items) {
+      const p = productRow.get(line.productId)!;
+      const stockAvail = running.get(line.productId)!;
+      const unitPrice = p.selling_price;
+      const lineTotal = unitPrice * line.quantity;
+      if (stockAvail < line.quantity) {
+        await db.execute("ROLLBACK");
+        return {
+          ok: false,
+          error: `Insufficient stock after reversal (check "${line.productId}")`,
+        };
+      }
+      totalAmount += lineTotal;
+      const nextStock = stockAvail - line.quantity;
+      running.set(line.productId, nextStock);
+      lineMeta.push({
+        productId: line.productId,
+        quantity: line.quantity,
+        unitPrice,
+        lineTotal,
+        nextStock,
+      });
+    }
+
+    const noteVal = note?.trim() || null;
+
+    for (const [pid, qty] of oldQtyByProduct) {
+      await db.execute(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+        [qty, pid],
+      );
+    }
+
+    await db.execute(
+      `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'sale'`,
+      [saleId],
+    );
+    await db.execute(`DELETE FROM sale_items WHERE sale_id = ?`, [saleId]);
+
+    await db.execute(
+      `UPDATE sales SET total_amount = ?, note = ? WHERE id = ?`,
+      [totalAmount, noteVal, saleId],
+    );
+
+    for (const line of lineMeta) {
+      const saleItemId = randomUuid();
+      await db.execute(
+        `INSERT INTO sale_items (id, sale_id, product_id, quantity, unit_price, line_total)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          saleItemId,
+          saleId,
+          line.productId,
+          line.quantity,
+          line.unitPrice,
+          line.lineTotal,
+        ],
+      );
+
+      await db.execute(
+        `UPDATE products SET stock_quantity = ? WHERE id = ?`,
+        [line.nextStock, line.productId],
+      );
+
+      const movId = randomUuid();
+      await db.execute(
+        `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          movId,
+          line.productId,
+          "sale",
+          -line.quantity,
+          "Sale · edited",
+          now,
+          saleId,
+        ],
+      );
+    }
+
+    await db.execute("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: sqlErr(e) };
+  }
+}
+
+/** Remove a recorded POS sale entirely and restore stock (undo mistaken sale). */
+export async function voidSaleClient(
+  profileId: string | undefined,
+  saleIdRaw: unknown,
+): Promise<ClientTransactResult> {
+  if (!profileId) {
+    return { ok: false, error: "No active profile" };
+  }
+  const saleId =
+    typeof saleIdRaw === "string" ? saleIdRaw.trim() : String(saleIdRaw ?? "").trim();
+  if (!saleId) {
+    return { ok: false, error: "Missing sale id" };
+  }
+
+  const db = await getDb();
+
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const saleRow = await db.select<{ id: string }[]>(
+      "SELECT id FROM sales WHERE id = ? LIMIT 1",
+      [saleId],
+    );
+    if (!saleRow.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Sale not found" };
+    }
+
+    type OldRow = { product_id: string; quantity: number };
+    const oldItems = await db.select<OldRow[]>(
+      "SELECT product_id, quantity FROM sale_items WHERE sale_id = ?",
+      [saleId],
+    );
+
+    const oldQtyByProduct = new Map<string, number>();
+    for (const row of oldItems) {
+      oldQtyByProduct.set(
+        row.product_id,
+        (oldQtyByProduct.get(row.product_id) ?? 0) + row.quantity,
+      );
+    }
+
+    for (const [pid, qty] of oldQtyByProduct) {
+      await db.execute(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+        [qty, pid],
+      );
+    }
+
+    await db.execute(
+      `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'sale'`,
+      [saleId],
+    );
+    await db.execute(`DELETE FROM sales WHERE id = ?`, [saleId]);
+
     await db.execute("COMMIT");
     return { ok: true };
   } catch (e) {

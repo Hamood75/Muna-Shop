@@ -104,6 +104,7 @@ export function ProductScanCombo({
       <BarcodeInput
         key={resetKey}
         {...barcodeProps}
+        wedgeAutoSubmit={false}
         onTypingChange={setDraft}
         onScan={handleScan}
       />

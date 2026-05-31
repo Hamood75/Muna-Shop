@@ -21,6 +21,11 @@ type Props = {
   wedgeIdleMs?: number;
   /** Max ms from first to last key in a burst to count as scanner-like (default 280). */
   wedgeBurstMaxMs?: number;
+  /**
+   * When false, only Enter submits (for name search fields). Scanners that send
+   * Enter still work; wedge-only scanners need this enabled.
+   */
+  wedgeAutoSubmit?: boolean;
   onScan: (code: string) => void;
   /** Fired whenever the visible input changes (helps build search-as-you-type UX). */
   onTypingChange?: (rawValue: string) => void;
@@ -40,6 +45,7 @@ export function BarcodeInput({
   minScanLength = 4,
   wedgeIdleMs = 55,
   wedgeBurstMaxMs = 280,
+  wedgeAutoSubmit = true,
   onTypingChange,
   onScan,
 }: Props) {
@@ -62,6 +68,7 @@ export function BarcodeInput({
   }
 
   function scheduleWedgeIdleSubmit() {
+    if (!wedgeAutoSubmit) return;
     clearIdleTimer();
     idleTimerRef.current = setTimeout(() => {
       idleTimerRef.current = null;

@@ -15,15 +15,11 @@ import { ProductScanCombo } from "@/components/product-scan-combo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
-import {
-  bumpSaleQuantity,
-  isPositiveSaleQuantity,
-  parseSaleQuantity,
-} from "@/lib/quantity";
+import { bumpSaleQuantity, isPositiveSaleQuantity } from "@/lib/quantity";
+import { SaleQuantityInput } from "@/components/sale-quantity-input";
 
 type Line = { product: Product; quantity: number };
 
@@ -148,17 +144,9 @@ export function NewSalePanel({ products }: { products: Product[] }) {
                   >
                     <Minus className="size-5" />
                   </Button>
-                  <Input
-                    className="w-20 text-center font-mono text-lg"
-                    inputMode="decimal"
-                    placeholder="0.5"
+                  <SaleQuantityInput
                     value={line.quantity}
-                    onChange={(e) =>
-                      setQty(
-                        line.product.id,
-                        parseSaleQuantity(e.target.value),
-                      )
-                    }
+                    onChange={(q) => setQty(line.product.id, q)}
                   />
                   <Button
                     type="button"

@@ -23,8 +23,8 @@ import { formatMoney } from "@/lib/format-money";
 import {
   bumpSaleQuantity,
   isPositiveSaleQuantity,
-  parseSaleQuantity,
 } from "@/lib/quantity";
+import { SaleQuantityInput } from "@/components/sale-quantity-input";
 
 export function NewCreditDebtPanel({ products }: { products: Product[] }) {
   const [product, setProduct] = React.useState<Product | null>(null);
@@ -193,12 +193,9 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
               >
                 <Minus className="size-5" />
               </Button>
-              <Input
-                className="w-20 text-center font-mono text-lg"
-                inputMode="decimal"
-                placeholder="0.5"
+              <SaleQuantityInput
                 value={quantity}
-                onChange={(e) => setQuantity(parseSaleQuantity(e.target.value))}
+                onChange={setQuantity}
               />
               <Button
                 type="button"

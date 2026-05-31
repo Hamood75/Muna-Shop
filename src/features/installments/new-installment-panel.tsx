@@ -20,11 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
-import {
-  bumpSaleQuantity,
-  isPositiveSaleQuantity,
-  parseSaleQuantity,
-} from "@/lib/quantity";
+import { bumpSaleQuantity, isPositiveSaleQuantity } from "@/lib/quantity";
+import { SaleQuantityInput } from "@/components/sale-quantity-input";
 
 type Line = { product: Product; quantity: number };
 
@@ -195,17 +192,9 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
                     >
                       <Minus className="size-5" />
                     </Button>
-                    <Input
-                      className="w-20 text-center font-mono text-lg"
-                      inputMode="decimal"
-                      placeholder="0.5"
+                    <SaleQuantityInput
                       value={line.quantity}
-                      onChange={(e) =>
-                        setQty(
-                          line.product.id,
-                          parseSaleQuantity(e.target.value),
-                        )
-                      }
+                      onChange={(q) => setQty(line.product.id, q)}
                     />
                     <Button
                       type="button"

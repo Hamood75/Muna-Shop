@@ -99,7 +99,7 @@ export function NewSalePanel({ products }: { products: Product[] }) {
           autoFocus
           id="sale-scan"
           label="Scan or search by name"
-          placeholder="Barcode scanner — type part of name — dropdown appears — pick row or Enter if one match"
+          placeholder="Scan barcode to add — or type product name and pick from the list"
         />
         <Separator />
 

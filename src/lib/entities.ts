@@ -60,6 +60,7 @@ export type InstallmentPlan = {
 
 export type InstallmentItem = {
   id: string;
+  productId?: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -69,6 +70,7 @@ export type InstallmentItem = {
 export type CreditDebt = {
   id: string;
   customerName: string;
+  productId?: string;
   quantity: number;
   unitPriceAtSale: number;
   totalOwed: number;

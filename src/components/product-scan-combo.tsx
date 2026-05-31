@@ -41,7 +41,7 @@ export type ProductScanComboProps = Omit<
 };
 
 /**
- * Scanner / Enter resolves barcodes uniquely; partial name search shows an anchored dropdown list.
+ * Barcode scan auto-adds; typed name search always shows a dropdown — user must pick a row.
  */
 export function ProductScanCombo({
   products,
@@ -60,15 +60,21 @@ export function ProductScanCombo({
   const [resetKey, setResetKey] = React.useState(0);
   const debouncedDraft = useDebouncedValue(draft, suggestDebounceMs);
 
-  const trimmedDebounced = normalizeScanInput(debouncedDraft);
-
   const matchesDebounced = React.useMemo(
-    () => filterProductsByNameOrBarcode(products, debouncedDraft, 60),
+    () => filterProductsByNameOrBarcode(products, debouncedDraft),
     [products, debouncedDraft],
   );
 
+  const matchesLive = React.useMemo(
+    () => filterProductsByNameOrBarcode(products, draft),
+    [products, draft],
+  );
+
+  const matches = draft === debouncedDraft ? matchesDebounced : matchesLive;
+  const trimmedLive = normalizeScanInput(draft);
+
   const showDropdown =
-    trimmedDebounced.length >= minSuggestChars && matchesDebounced.length > 0;
+    trimmedLive.length >= minSuggestChars && matches.length > 0;
 
   function pickAndReset(product: Product) {
     onPick(product);
@@ -84,16 +90,13 @@ export function ProductScanCombo({
     }
     const term = normalizeScanInput(rawCode);
     if (!term) return;
-    const options = filterProductsByNameOrBarcode(products, term, 120);
-    if (options.length > 1) {
-      toast.message("Several products match — choose one from the list", {
-        duration: 2600,
-      });
-      setDraft(term);
+    setDraft(term);
+    const options = filterProductsByNameOrBarcode(products, term);
+    if (options.length === 0) {
+      toast.error("No product matches — try another name or scan the barcode");
       return;
     }
-    toast.error("No product matches — try barcode or refine the search");
-    setDraft(term);
+    toast.message("Choose a product from the list below", { duration: 2400 });
   }
 
   return (
@@ -113,7 +116,7 @@ export function ProductScanCombo({
           role="listbox"
           aria-label="Matching products"
         >
-          {matchesDebounced.map((p) => (
+          {matches.map((p) => (
             <li key={p.id} role="option" className="border-b border-border/60 last:border-0">
               <button
                 type="button"

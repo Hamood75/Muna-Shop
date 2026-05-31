@@ -12,9 +12,9 @@ export function buildBarcodeLookup(products: Product[]) {
   return m;
 }
 
-/** Barcode-aware resolution; substring name/barcode only if exactly one match. */
+/** Barcode-only auto-pick (scanner / typed barcode). Name search never auto-selects. */
 export function resolvePickFromScan(
-  products: Product[],
+  _products: Product[],
   barcodeMap: Map<string, Product>,
   raw: string,
 ): Product | undefined {
@@ -30,31 +30,24 @@ export function resolvePickFromScan(
       barcodeMap.get(code.padStart(13, "0")) ??
       barcodeMap.get(code.padStart(12, "0"));
   }
-  if (direct) return direct;
-
-  const term = code.toLowerCase();
-  const found = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(term) ||
-      (p.barcode?.toLowerCase().includes(term) ?? false),
-  );
-  if (found.length === 1) return found[0];
-  return undefined;
+  return direct;
 }
 
+/** Search full catalogue: every word in the query must match name or barcode. */
 export function filterProductsByNameOrBarcode(
   products: Product[],
   raw: string,
-  limit = 50,
+  limit = 80,
 ): Product[] {
   const q = normalizeScanInput(raw).toLowerCase();
   if (!q) return [];
 
-  const out = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(q) ||
-      (p.barcode?.toLowerCase().includes(q) ?? false),
-  );
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const out = products.filter((p) => {
+    const hay = `${p.name.toLowerCase()} ${p.barcode?.toLowerCase() ?? ""}`;
+    return tokens.every((tok) => hay.includes(tok));
+  });
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out.slice(0, limit);
 }

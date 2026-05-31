@@ -17,6 +17,8 @@ import {
   createInstallmentPlanSchema,
   recordCreditPaymentSchema,
   recordInstallmentPaymentSchema,
+  updateCreditDebtSchema,
+  updateInstallmentPlanSchema,
 } from "@/lib/validations/credit";
 import { getDb } from "@/lib/sqlite-db";
 import { randomUuid } from "@/lib/random-id";
@@ -724,6 +726,256 @@ export async function createInstallmentPlanClient(
   }
 }
 
+export async function updateInstallmentPlanClient(
+  profileId: string | undefined,
+  input: unknown,
+): Promise<ClientTransactResult> {
+  if (!profileId) {
+    return { ok: false, error: "No active profile" };
+  }
+
+  const parsed = updateInstallmentPlanSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: zodFirstIssue(parsed.error) };
+  }
+  const { planId, customerName, items, notes } = parsed.data;
+
+  const db = await getDb();
+  const now = Date.now();
+
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const planRows = await db.select<
+      { id: string; paid_so_far: number }[]
+    >("SELECT id, paid_so_far FROM installment_plans WHERE id = ? LIMIT 1", [
+      planId,
+    ]);
+    if (!planRows.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Installment plan not found" };
+    }
+    const paidSoFarBefore = planRows[0].paid_so_far;
+
+    type OldRow = { product_id: string; quantity: number };
+    const oldItems = await db.select<OldRow[]>(
+      "SELECT product_id, quantity FROM installment_items WHERE plan_id = ?",
+      [planId],
+    );
+
+    const oldQtyByProduct = new Map<string, number>();
+    for (const row of oldItems) {
+      oldQtyByProduct.set(
+        row.product_id,
+        (oldQtyByProduct.get(row.product_id) ?? 0) + row.quantity,
+      );
+    }
+
+    const newProductIds = [...new Set(items.map((i) => i.productId))];
+    const allProductIds = [
+      ...new Set([...oldQtyByProduct.keys(), ...newProductIds]),
+    ];
+    if (!allProductIds.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "No products in plan" };
+    }
+
+    type StockRow = {
+      id: string;
+      name: string;
+      selling_price: number;
+      stock_quantity: number;
+    };
+    const phAll = allProductIds.map(() => "?").join(",");
+    const stockRows = await db.select<StockRow[]>(
+      `SELECT id, name, selling_price, stock_quantity FROM products WHERE id IN (${phAll})`,
+      allProductIds,
+    );
+    if (stockRows.length !== allProductIds.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "One or more products no longer exist" };
+    }
+
+    const productRow = new Map(stockRows.map((r) => [r.id, r]));
+
+    const running = new Map<string, number>();
+    for (const pid of newProductIds) {
+      const row = productRow.get(pid)!;
+      const returned = oldQtyByProduct.get(pid) ?? 0;
+      running.set(pid, row.stock_quantity + returned);
+    }
+
+    let totalAmount = 0;
+    const lineMeta: {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      nextStock: number;
+    }[] = [];
+
+    for (const line of items) {
+      const p = productRow.get(line.productId)!;
+      const stockAvail = running.get(line.productId)!;
+      const unitPrice = p.selling_price;
+      const lineTotal = unitPrice * line.quantity;
+      if (stockAvail < line.quantity) {
+        await db.execute("ROLLBACK");
+        return {
+          ok: false,
+          error: `Insufficient stock for "${p.name}"`,
+        };
+      }
+      totalAmount += lineTotal;
+      const nextStock = stockAvail - line.quantity;
+      running.set(line.productId, nextStock);
+      lineMeta.push({
+        productId: line.productId,
+        quantity: line.quantity,
+        unitPrice,
+        lineTotal,
+        nextStock,
+      });
+    }
+
+    const paidSoFar = Math.min(paidSoFarBefore, totalAmount);
+    const status =
+      paidSoFar >= totalAmount
+        ? INSTALLMENT_STATUS.completed
+        : INSTALLMENT_STATUS.active;
+    const noteVal = notes?.trim() || null;
+    const customer = customerName.trim();
+
+    for (const [pid, qty] of oldQtyByProduct) {
+      await db.execute(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+        [qty, pid],
+      );
+    }
+
+    await db.execute(
+      `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'installment'`,
+      [planId],
+    );
+    await db.execute(`DELETE FROM installment_items WHERE plan_id = ?`, [
+      planId,
+    ]);
+
+    await db.execute(
+      `UPDATE installment_plans
+       SET customer_name = ?, total_amount = ?, paid_so_far = ?, notes = ?, status = ?
+       WHERE id = ?`,
+      [customer, totalAmount, paidSoFar, noteVal, status, planId],
+    );
+
+    for (const line of lineMeta) {
+      const itemId = randomUuid();
+      await db.execute(
+        `INSERT INTO installment_items (id, plan_id, product_id, quantity, unit_price, line_total)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          itemId,
+          planId,
+          line.productId,
+          line.quantity,
+          line.unitPrice,
+          line.lineTotal,
+        ],
+      );
+
+      await db.execute(
+        `UPDATE products SET stock_quantity = ? WHERE id = ?`,
+        [line.nextStock, line.productId],
+      );
+
+      const movId = randomUuid();
+      await db.execute(
+        `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          movId,
+          line.productId,
+          "installment",
+          -line.quantity,
+          `Installment · ${customer} · edited`,
+          now,
+          planId,
+        ],
+      );
+    }
+
+    await db.execute("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: sqlErr(e) };
+  }
+}
+
+export async function voidInstallmentPlanClient(
+  profileId: string | undefined,
+  planIdRaw: unknown,
+): Promise<ClientTransactResult> {
+  if (!profileId) {
+    return { ok: false, error: "No active profile" };
+  }
+  const planId =
+    typeof planIdRaw === "string"
+      ? planIdRaw.trim()
+      : String(planIdRaw ?? "").trim();
+  if (!planId) {
+    return { ok: false, error: "Missing plan id" };
+  }
+
+  const db = await getDb();
+
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const planRow = await db.select<{ id: string }[]>(
+      "SELECT id FROM installment_plans WHERE id = ? LIMIT 1",
+      [planId],
+    );
+    if (!planRow.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Installment plan not found" };
+    }
+
+    type OldRow = { product_id: string; quantity: number };
+    const oldItems = await db.select<OldRow[]>(
+      "SELECT product_id, quantity FROM installment_items WHERE plan_id = ?",
+      [planId],
+    );
+
+    for (const row of oldItems) {
+      await db.execute(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+        [row.quantity, row.product_id],
+      );
+    }
+
+    await db.execute(
+      `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'installment'`,
+      [planId],
+    );
+    await db.execute(`DELETE FROM installment_plans WHERE id = ?`, [planId]);
+
+    await db.execute("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: sqlErr(e) };
+  }
+}
+
 export async function recordInstallmentPaymentClient(
   input: unknown,
   plan: {
@@ -844,6 +1096,201 @@ export async function createCreditDebtClient(
     );
     await db.execute("COMMIT");
     return { ok: true, data: { id: debtId } };
+  } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: sqlErr(e) };
+  }
+}
+
+export async function updateCreditDebtClient(
+  profileId: string | undefined,
+  input: unknown,
+): Promise<ClientTransactResult> {
+  if (!profileId) {
+    return { ok: false, error: "No active profile" };
+  }
+
+  const parsed = updateCreditDebtSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: zodFirstIssue(parsed.error) };
+  }
+  const data = parsed.data;
+
+  const db = await getDb();
+  const now = Date.now();
+
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const debtRows = await db.select<
+      {
+        id: string;
+        product_id: string;
+        quantity: number;
+        paid_so_far: number;
+      }[]
+    >(
+      "SELECT id, product_id, quantity, paid_so_far FROM credit_debts WHERE id = ? LIMIT 1",
+      [data.debtId],
+    );
+    if (!debtRows.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Pay-later record not found" };
+    }
+    const old = debtRows[0];
+    const paidSoFarBefore = old.paid_so_far;
+
+    const productIds = [...new Set([old.product_id, data.productId])];
+    type StockRow = {
+      id: string;
+      name: string;
+      selling_price: number;
+      stock_quantity: number;
+    };
+    const ph = productIds.map(() => "?").join(",");
+    const stockRows = await db.select<StockRow[]>(
+      `SELECT id, name, selling_price, stock_quantity FROM products WHERE id IN (${ph})`,
+      productIds,
+    );
+    if (stockRows.length !== productIds.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Product no longer exists" };
+    }
+    const productRow = new Map(stockRows.map((r) => [r.id, r]));
+
+    await db.execute(
+      `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+      [old.quantity, old.product_id],
+    );
+
+    const target = productRow.get(data.productId)!;
+    const returned =
+      old.product_id === data.productId ? old.quantity : 0;
+    const avail = target.stock_quantity + returned;
+
+    if (avail < data.quantity) {
+      await db.execute("ROLLBACK");
+      return {
+        ok: false,
+        error: `Insufficient stock for "${target.name}"`,
+      };
+    }
+
+    const unitPriceAtSale = target.selling_price;
+    const totalOwed =
+      data.totalOwed ?? unitPriceAtSale * data.quantity;
+    const paidSoFar = Math.min(paidSoFarBefore, totalOwed);
+    const status =
+      paidSoFar >= totalOwed
+        ? CREDIT_DEBT_STATUS.settled
+        : CREDIT_DEBT_STATUS.open;
+    const customer = data.customerName.trim();
+    const nextStock = avail - data.quantity;
+
+    await db.execute(
+      `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'pay_later'`,
+      [data.debtId],
+    );
+
+    await db.execute(
+      `UPDATE credit_debts
+       SET customer_name = ?, product_id = ?, quantity = ?, unit_price_at_sale = ?,
+           total_owed = ?, paid_so_far = ?, notes = ?, status = ?
+       WHERE id = ?`,
+      [
+        customer,
+        data.productId,
+        data.quantity,
+        unitPriceAtSale,
+        totalOwed,
+        paidSoFar,
+        data.notes?.trim() || null,
+        status,
+        data.debtId,
+      ],
+    );
+
+    await db.execute(
+      `UPDATE products SET stock_quantity = ? WHERE id = ?`,
+      [nextStock, data.productId],
+    );
+
+    const movId = randomUuid();
+    await db.execute(
+      `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        movId,
+        data.productId,
+        "pay_later",
+        -data.quantity,
+        `Pay later · ${customer} · edited`,
+        now,
+        data.debtId,
+      ],
+    );
+
+    await db.execute("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: sqlErr(e) };
+  }
+}
+
+export async function voidCreditDebtClient(
+  profileId: string | undefined,
+  debtIdRaw: unknown,
+): Promise<ClientTransactResult> {
+  if (!profileId) {
+    return { ok: false, error: "No active profile" };
+  }
+  const debtId =
+    typeof debtIdRaw === "string"
+      ? debtIdRaw.trim()
+      : String(debtIdRaw ?? "").trim();
+  if (!debtId) {
+    return { ok: false, error: "Missing record id" };
+  }
+
+  const db = await getDb();
+
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const debtRows = await db.select<
+      { id: string; product_id: string; quantity: number }[]
+    >(
+      "SELECT id, product_id, quantity FROM credit_debts WHERE id = ? LIMIT 1",
+      [debtId],
+    );
+    if (!debtRows.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "Pay-later record not found" };
+    }
+    const old = debtRows[0];
+
+    await db.execute(
+      `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+      [old.quantity, old.product_id],
+    );
+
+    await db.execute(
+      `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'pay_later'`,
+      [debtId],
+    );
+    await db.execute(`DELETE FROM credit_debts WHERE id = ?`, [debtId]);
+
+    await db.execute("COMMIT");
+    return { ok: true };
   } catch (e) {
     try {
       await db.execute("ROLLBACK");

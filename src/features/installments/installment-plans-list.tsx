@@ -12,14 +12,23 @@ import {
 import { queryKeys } from "@/lib/query-keys";
 import { INSTALLMENT_STATUS } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
+import type { Product } from "@/lib/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EditInstallmentPlanDialog } from "@/features/installments/edit-installment-plan-dialog";
 
 type Plan = InstallmentPlan;
 
-export function InstallmentPlansList({ plans }: { plans: Plan[] }) {
+export function InstallmentPlansList({
+  plans,
+  products,
+}: {
+  plans: Plan[];
+  products: Product[];
+}) {
   const [filter, setFilter] = React.useState<"active" | "all">("active");
+  const [editPlan, setEditPlan] = React.useState<Plan | null>(null);
 
   const filtered = React.useMemo(() => {
     const sorted = [...plans].sort((a, b) => b.createdAt - a.createdAt);
@@ -29,6 +38,14 @@ export function InstallmentPlansList({ plans }: { plans: Plan[] }) {
 
   return (
     <Card>
+      <EditInstallmentPlanDialog
+        plan={editPlan}
+        products={products}
+        open={editPlan != null}
+        onOpenChange={(open) => {
+          if (!open) setEditPlan(null);
+        }}
+      />
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="text-lg">Installment plans</CardTitle>
         <div className="flex gap-2">
@@ -61,7 +78,11 @@ export function InstallmentPlansList({ plans }: { plans: Plan[] }) {
         ) : (
           <ul className="space-y-4">
             {filtered.map((plan) => (
-              <PlanRow key={plan.id} plan={plan} />
+              <PlanRow
+                key={plan.id}
+                plan={plan}
+                onEdit={() => setEditPlan(plan)}
+              />
             ))}
           </ul>
         )}
@@ -70,7 +91,13 @@ export function InstallmentPlansList({ plans }: { plans: Plan[] }) {
   );
 }
 
-function PlanRow({ plan }: { plan: Plan }) {
+function PlanRow({
+  plan,
+  onEdit,
+}: {
+  plan: Plan;
+  onEdit: () => void;
+}) {
   const [amount, setAmount] = React.useState("");
   const queryClient = useQueryClient();
   const payMut = useMutation({
@@ -100,10 +127,21 @@ function PlanRow({ plan }: { plan: Plan }) {
 
   return (
     <li className="rounded-xl border border-border bg-muted/30 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="font-medium">{plan.customerName}</div>
-        <div className="text-xs text-muted-foreground">
-          {format(new Date(plan.createdAt), "PPp")}
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-9 cursor-pointer"
+            onClick={onEdit}
+          >
+            Edit
+          </Button>
+          <div className="text-xs text-muted-foreground">
+            {format(new Date(plan.createdAt), "PPp")}
+          </div>
         </div>
       </div>
       <div className="mt-2 grid gap-1 text-sm text-muted-foreground">

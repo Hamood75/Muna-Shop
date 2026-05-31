@@ -27,6 +27,13 @@ export const recordInstallmentPaymentSchema = z.object({
   amount: z.coerce.number().positive(),
 });
 
+export const updateInstallmentPlanSchema = z.object({
+  planId: z.string().min(1),
+  customerName: z.string().trim().min(1).max(200),
+  items: z.array(saleLineSchema).min(1),
+  notes: z.string().optional(),
+});
+
 export const createCreditDebtSchema = z.object({
   customerName: z.string().trim().min(1).max(200),
   productId: z.string().min(1),
@@ -39,4 +46,13 @@ export const createCreditDebtSchema = z.object({
 export const recordCreditPaymentSchema = z.object({
   debtId: z.string().min(1),
   amount: z.coerce.number().positive(),
+});
+
+export const updateCreditDebtSchema = z.object({
+  debtId: z.string().min(1),
+  customerName: z.string().trim().min(1).max(200),
+  productId: z.string().min(1),
+  quantity: z.coerce.number().int().positive(),
+  totalOwed: z.coerce.number().positive().optional(),
+  notes: z.string().optional(),
 });

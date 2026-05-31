@@ -31,7 +31,10 @@ export function PayLaterPage() {
   return (
     <div className="space-y-8">
       <NewCreditDebtPanel products={data?.products ?? []} />
-      <CreditDebtsList debts={data?.debts ?? []} />
+      <CreditDebtsList
+        debts={data?.debts ?? []}
+        products={data?.products ?? []}
+      />
     </div>
   );
 }

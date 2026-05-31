@@ -320,6 +320,7 @@ export async function fetchInstallmentsBundle(): Promise<InstallmentPlan[]> {
   for (const i of items) {
     const row: InstallmentItem = {
       id: i.id,
+      productId: i.product_id,
       quantity: i.quantity,
       unitPrice: i.unit_price,
       lineTotal: i.line_total,
@@ -368,6 +369,7 @@ export async function fetchCreditDebtsBundle(): Promise<CreditDebt[]> {
   return rows.map((r) => ({
     id: r.id,
     customerName: r.customer_name,
+    productId: r.product_id,
     quantity: r.quantity,
     unitPriceAtSale: r.unit_price_at_sale,
     totalOwed: r.total_owed,

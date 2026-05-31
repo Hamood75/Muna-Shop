@@ -146,7 +146,7 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
             autoFocus={false}
             id="inst-scan"
             label="Products"
-            placeholder="Scan barcode — type part of name — pick from dropdown or Enter when one match"
+            placeholder="Scan barcode to add — or type product name and pick from the list"
           />
           <Separator />
 

@@ -31,7 +31,10 @@ export function InstallmentsPage() {
   return (
     <div className="space-y-8">
       <NewInstallmentPanel products={data?.products ?? []} />
-      <InstallmentPlansList plans={data?.plans ?? []} />
+      <InstallmentPlansList
+        plans={data?.plans ?? []}
+        products={data?.products ?? []}
+      />
     </div>
   );
 }

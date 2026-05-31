@@ -20,6 +20,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
+import {
+  bumpSaleQuantity,
+  isPositiveSaleQuantity,
+  parseSaleQuantity,
+} from "@/lib/quantity";
 
 type Line = { product: Product; quantity: number };
 
@@ -68,7 +73,7 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
   }
 
   function setQty(productId: string, quantity: number) {
-    if (quantity < 1) {
+    if (!isPositiveSaleQuantity(quantity)) {
       setLines((prev) => prev.filter((l) => l.product.id !== productId));
       return;
     }
@@ -182,19 +187,23 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
                       variant="outline"
                       aria-label="Decrease quantity"
                       onClick={() =>
-                        setQty(line.product.id, line.quantity - 1)
+                        setQty(
+                          line.product.id,
+                          bumpSaleQuantity(line.quantity, -1),
+                        )
                       }
                     >
                       <Minus className="size-5" />
                     </Button>
                     <Input
-                      className="w-16 text-center font-mono text-lg"
-                      inputMode="numeric"
+                      className="w-20 text-center font-mono text-lg"
+                      inputMode="decimal"
+                      placeholder="0.5"
                       value={line.quantity}
                       onChange={(e) =>
                         setQty(
                           line.product.id,
-                          Number.parseInt(e.target.value, 10) || 0,
+                          parseSaleQuantity(e.target.value),
                         )
                       }
                     />
@@ -204,7 +213,10 @@ export function NewInstallmentPanel({ products }: { products: Product[] }) {
                       variant="outline"
                       aria-label="Increase quantity"
                       onClick={() =>
-                        setQty(line.product.id, line.quantity + 1)
+                        setQty(
+                          line.product.id,
+                          bumpSaleQuantity(line.quantity, 1),
+                        )
                       }
                     >
                       <Plus className="size-5" />

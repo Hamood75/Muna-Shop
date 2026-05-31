@@ -12,6 +12,7 @@ import {
 import { queryKeys } from "@/lib/query-keys";
 import { INSTALLMENT_STATUS } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
+import { formatQuantityDisplay } from "@/lib/quantity";
 import type { Product } from "@/lib/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -151,7 +152,8 @@ function PlanRow({
             className="flex justify-between gap-2 tabular-nums"
           >
             <span>
-              {item.product?.name ?? "Product"} × {item.quantity}
+              {item.product?.name ?? "Product"} ×{" "}
+              {formatQuantityDisplay(item.quantity)}
             </span>
             <span>{formatMoney(item.lineTotal)}</span>
           </div>

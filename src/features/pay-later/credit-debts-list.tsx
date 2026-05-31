@@ -12,6 +12,7 @@ import {
 import { queryKeys } from "@/lib/query-keys";
 import { CREDIT_DEBT_STATUS } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
+import { formatQuantityDisplay } from "@/lib/quantity";
 import type { Product } from "@/lib/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,7 +150,7 @@ function DebtRow({
         <span className="font-medium text-foreground">
           {debt.product?.name ?? "Product"}
         </span>
-        {" · "}× {debt.quantity}
+        {" · "}× {formatQuantityDisplay(debt.quantity)}
         <span className="tabular-nums">
           {" "}
           @ {formatMoney(debt.unitPriceAtSale)}

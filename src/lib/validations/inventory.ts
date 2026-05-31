@@ -5,7 +5,7 @@ export const productCreateSchema = z.object({
   barcode: z.string().optional(),
   buyingPrice: z.coerce.number().nonnegative(),
   sellingPrice: z.coerce.number().nonnegative(),
-  stockQuantity: z.coerce.number().int().nonnegative(),
+  stockQuantity: z.coerce.number().nonnegative(),
 });
 
 export const productUpdateSchema = productCreateSchema.partial().extend({
@@ -14,7 +14,10 @@ export const productUpdateSchema = productCreateSchema.partial().extend({
 
 export const saleLineSchema = z.object({
   productId: z.string().min(1),
-  quantity: z.coerce.number().int().positive(),
+  quantity: z.coerce
+    .number()
+    .positive("Quantity must be greater than zero")
+    .max(1_000_000),
 });
 
 export const recordSaleSchema = z.object({

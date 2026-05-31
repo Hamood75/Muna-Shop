@@ -6,6 +6,7 @@ import type { Product, Sale } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format-money";
+import { formatQuantityDisplay } from "@/lib/quantity";
 import { EditSaleDialog } from "@/features/sales/edit-sale-dialog";
 
 export function SalesHistory({
@@ -102,7 +103,8 @@ export function SalesHistory({
                       className="flex justify-between gap-2 tabular-nums"
                     >
                       <span>
-                        {item.product?.name ?? "Product"} × {item.quantity}
+                        {item.product?.name ?? "Product"} ×{" "}
+                        {formatQuantityDisplay(item.quantity)}
                       </span>
                       <span>{formatMoney(item.lineTotal)}</span>
                     </div>

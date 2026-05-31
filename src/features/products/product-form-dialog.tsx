@@ -156,7 +156,13 @@ export function ProductFormDialog({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="p-stock">Stock quantity</Label>
-            <Input id="p-stock" type="number" {...form.register("stockQuantity")} />
+            <Input
+              id="p-stock"
+              type="number"
+              step="0.001"
+              min="0"
+              {...form.register("stockQuantity")}
+            />
           </div>
           <Button type="submit" size="lg" disabled={pending}>
             {pending ? "Saving…" : editing ? "Save changes" : "Create product"}

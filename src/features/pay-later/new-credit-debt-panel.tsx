@@ -20,6 +20,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { isLowStock } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
+import {
+  bumpSaleQuantity,
+  isPositiveSaleQuantity,
+  parseSaleQuantity,
+} from "@/lib/quantity";
 
 export function NewCreditDebtPanel({ products }: { products: Product[] }) {
   const [product, setProduct] = React.useState<Product | null>(null);
@@ -94,8 +99,8 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
       toast.error("Choose a product (scan or search above)");
       return;
     }
-    if (quantity < 1) {
-      toast.error("Quantity must be at least 1");
+    if (!isPositiveSaleQuantity(quantity)) {
+      toast.error("Quantity must be greater than zero (e.g. 0.5, 1.25)");
       return;
     }
     if (product.stockQuantity < quantity) {
@@ -179,24 +184,28 @@ export function NewCreditDebtPanel({ products }: { products: Product[] }) {
                 size="lg"
                 variant="outline"
                 aria-label="Decrease quantity"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                onClick={() =>
+                  setQuantity((q) => {
+                    const next = bumpSaleQuantity(q, -1);
+                    return isPositiveSaleQuantity(next) ? next : q;
+                  })
+                }
               >
                 <Minus className="size-5" />
               </Button>
               <Input
-                className="w-16 text-center font-mono text-lg"
-                inputMode="numeric"
+                className="w-20 text-center font-mono text-lg"
+                inputMode="decimal"
+                placeholder="0.5"
                 value={quantity}
-                onChange={(e) =>
-                  setQuantity(Math.max(1, Number.parseInt(e.target.value, 10) || 1))
-                }
+                onChange={(e) => setQuantity(parseSaleQuantity(e.target.value))}
               />
               <Button
                 type="button"
                 size="lg"
                 variant="outline"
                 aria-label="Increase quantity"
-                onClick={() => setQuantity((q) => q + 1)}
+                onClick={() => setQuantity((q) => bumpSaleQuantity(q, 1))}
               >
                 <Plus className="size-5" />
               </Button>

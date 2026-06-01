@@ -2,20 +2,26 @@
 
 import * as React from "react";
 import {
+  endOfDay,
+  format,
+  parseISO,
   startOfDay,
   startOfMonth,
   startOfWeek,
   subDays,
 } from "date-fns";
-import { Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProductPicker } from "@/components/product-picker";
+import { useShopSession } from "@/context/shop-session";
+import { REPORTS_SALES_BY_DATE_PAGE_SIZE, ROLES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { formatMoney } from "@/lib/format-money";
+import { formatQuantityDisplay } from "@/lib/quantity";
 import {
   allProductsProfitInRange,
   estimatedNetProfitInRange,
@@ -41,6 +47,82 @@ export function ReportsClient({
   products: ProductPL[];
   stockMovements: StockMovementPL[];
 }) {
+  const { profile } = useShopSession();
+  const isSuperAdmin = profile?.role === ROLES.super_admin;
+
+  const [salesDate, setSalesDate] = React.useState(() =>
+    format(new Date(), "yyyy-MM-dd"),
+  );
+  const [salesDatePage, setSalesDatePage] = React.useState(0);
+
+  const salesDateBounds = React.useMemo(() => {
+    const d = parseISO(salesDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return {
+      start: startOfDay(d).getTime(),
+      end: endOfDay(d).getTime(),
+    };
+  }, [salesDate]);
+
+  const salesOnSelectedDate = React.useMemo(() => {
+    if (!salesDateBounds) return [];
+    return [...sales]
+      .filter(
+        (s) =>
+          s.createdAt >= salesDateBounds.start &&
+          s.createdAt <= salesDateBounds.end,
+      )
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [sales, salesDateBounds]);
+
+  const salesDateMetrics = React.useMemo(() => {
+    if (!salesDateBounds) return null;
+    const revenue = salesOnSelectedDate.reduce((a, s) => a + s.totalAmount, 0);
+    const pl = estimatedNetProfitInRange(
+      sales,
+      stockMovements,
+      products,
+      salesDateBounds.start,
+      salesDateBounds.end,
+    );
+    return {
+      revenue,
+      tx: salesOnSelectedDate.length,
+      grossFromSales: pl.grossFromSales,
+      damagedAtCost: pl.damagedAtCost,
+      netEstimate: pl.netEstimate,
+    };
+  }, [
+    sales,
+    stockMovements,
+    products,
+    salesDateBounds,
+    salesOnSelectedDate,
+  ]);
+
+  const salesDatePageSize = REPORTS_SALES_BY_DATE_PAGE_SIZE;
+  const salesDatePageCount = Math.max(
+    1,
+    Math.ceil(salesOnSelectedDate.length / salesDatePageSize),
+  );
+  const salesDatePageClamped = Math.min(salesDatePage, salesDatePageCount - 1);
+  const salesDatePageItems = salesOnSelectedDate.slice(
+    salesDatePageClamped * salesDatePageSize,
+    salesDatePageClamped * salesDatePageSize + salesDatePageSize,
+  );
+  const salesDateHasPrev = salesDatePageClamped > 0;
+  const salesDateHasNext = salesDatePageClamped < salesDatePageCount - 1;
+
+  React.useEffect(() => {
+    setSalesDatePage(0);
+  }, [salesDate]);
+
+  React.useEffect(() => {
+    if (salesDatePage !== salesDatePageClamped) {
+      setSalesDatePage(salesDatePageClamped);
+    }
+  }, [salesDatePage, salesDatePageClamped]);
+
   const periods = React.useMemo(() => {
     const now = Date.now();
     const day = startOfDay(new Date()).getTime();
@@ -172,6 +254,30 @@ export function ReportsClient({
       }
     }
     downloadCsv(`reports-line-items-${fileStamp()}.csv`, toCsv(headers, rows));
+  }
+
+  function exportSalesForDate() {
+    if (!salesDateBounds) return;
+    const headers = [
+      "Sale date (ISO)",
+      "Sale ID",
+      "Total amount",
+      "Note",
+      "Line item count",
+    ];
+    const rows = [...salesOnSelectedDate]
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((s) => [
+        new Date(s.createdAt).toISOString(),
+        s.id,
+        formatMoney(s.totalAmount),
+        s.note ?? "",
+        (s.items ?? []).length,
+      ]);
+    downloadCsv(
+      `reports-sales-${salesDate}-${fileStamp()}.csv`,
+      toCsv(headers, rows),
+    );
   }
 
   const productPeriodPresets = React.useMemo(() => {
@@ -345,6 +451,173 @@ export function ReportsClient({
           </div>
         </CardHeader>
       </Card>
+
+      {isSuperAdmin ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Sales by date</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Pick any calendar day to review revenue, margin, and each
+                transaction for that day.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="report-sales-date">Date</Label>
+                <Input
+                  id="report-sales-date"
+                  type="date"
+                  value={salesDate}
+                  onChange={(e) => setSalesDate(e.target.value)}
+                  className="h-11 w-full min-w-[11rem] cursor-pointer sm:w-auto"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="cursor-pointer gap-2"
+                onClick={() => exportSalesForDate()}
+                disabled={salesOnSelectedDate.length === 0}
+              >
+                <Download className="size-4" aria-hidden />
+                Export day (CSV)
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {!salesDateBounds ? (
+              <p className="text-sm text-muted-foreground">
+                Choose a valid date.
+              </p>
+            ) : salesDateMetrics ? (
+              <>
+                <div className="rounded-xl border border-border bg-muted/25 p-4">
+                  <p className="text-sm font-medium">
+                    {format(parseISO(salesDate), "EEEE, MMM d, yyyy")}
+                  </p>
+                  <div className="mt-4">
+                    <p className="text-3xl font-semibold tabular-nums">
+                      {formatMoney(salesDateMetrics.revenue)}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Revenue · {salesDateMetrics.tx}{" "}
+                      {salesDateMetrics.tx === 1 ? "transaction" : "transactions"}
+                    </p>
+                  </div>
+                  <div className="mt-4 border-t border-border/80 pt-3 text-sm">
+                    <div className="flex justify-between gap-2 tabular-nums">
+                      <span className="text-muted-foreground">
+                        Gross profit (sales)
+                      </span>
+                      <span>{formatMoney(salesDateMetrics.grossFromSales)}</span>
+                    </div>
+                    <div className="mt-2 flex justify-between gap-2 tabular-nums">
+                      <span className="text-muted-foreground">
+                        Damaged @ cost
+                      </span>
+                      <span className="text-destructive">
+                        {salesDateMetrics.damagedAtCost > 0
+                          ? formatMoney(-salesDateMetrics.damagedAtCost)
+                          : formatMoney(salesDateMetrics.damagedAtCost)}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex justify-between gap-2 border-t border-border/60 pt-3 font-semibold tabular-nums">
+                      <span>Est. net profit</span>
+                      <span className="text-primary">
+                        {formatMoney(salesDateMetrics.netEstimate)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {salesOnSelectedDate.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No sales recorded on this date.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="space-y-3">
+                      {salesDatePageItems.map((sale) => (
+                        <li
+                          key={sale.id}
+                          className="rounded-xl border border-border bg-muted/30 p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="text-sm font-semibold tabular-nums">
+                              {formatMoney(sale.totalAmount)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {format(new Date(sale.createdAt), "PPpp")}
+                            </div>
+                          </div>
+                          {sale.note ? (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              {sale.note}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                            {(sale.items ?? []).map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex justify-between gap-2 tabular-nums"
+                              >
+                                <span>
+                                  {item.product?.name ?? "Product"} ×{" "}
+                                  {formatQuantityDisplay(item.quantity)}
+                                </span>
+                                <span>{formatMoney(item.lineTotal)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {salesOnSelectedDate.length > salesDatePageSize ? (
+                      <div className="flex flex-col gap-3 border-t border-border/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {salesDatePageSize} per page · {salesOnSelectedDate.length}{" "}
+                          total
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer gap-1"
+                            disabled={!salesDateHasPrev}
+                            onClick={() =>
+                              setSalesDatePage((p) => Math.max(0, p - 1))
+                            }
+                          >
+                            <ChevronLeft className="size-4" aria-hidden />
+                            Previous
+                          </Button>
+                          <span className="min-w-[5rem] text-center text-sm tabular-nums text-muted-foreground">
+                            Page {salesDatePageClamped + 1} of {salesDatePageCount}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer gap-1"
+                            disabled={!salesDateHasNext}
+                            onClick={() => setSalesDatePage((p) => p + 1)}
+                          >
+                            Next
+                            <ChevronRight className="size-4" aria-hidden />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

@@ -17,6 +17,9 @@ export const DASHBOARD_RECENT_SALES_PAGE_SIZE = 3;
 /** Reports "Sales by date" list (super admin) */
 export const REPORTS_SALES_BY_DATE_PAGE_SIZE = 20;
 
+/** Installment / pay-later payment history list */
+export const PLAN_PAYMENTS_PAGE_SIZE = 20;
+
 export const ROLES = {
   super_admin: "super_admin",
   admin: "admin",
@@ -25,9 +28,14 @@ export const ROLES = {
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
-/** Admin-only areas (reports, etc.); super admin is included. */
+/** Admin-only areas; super admin is included. */
 export function isAdminRole(role: string | undefined): boolean {
   return role === ROLES.admin || role === ROLES.super_admin;
+}
+
+/** Dashboard, reports, and team management. */
+export function isSuperAdminRole(role: string | undefined): boolean {
+  return role === ROLES.super_admin;
 }
 
 export const INSTALLMENT_STATUS = {
@@ -38,4 +46,10 @@ export const INSTALLMENT_STATUS = {
 export const CREDIT_DEBT_STATUS = {
   open: "open",
   settled: "settled",
+} as const;
+
+/** Cash collected from installment / pay-later payments (by payment date). */
+export const CASH_COLLECTION_SOURCE = {
+  installment: "installment",
+  payLater: "pay_later",
 } as const;

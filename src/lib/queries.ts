@@ -1,4 +1,5 @@
 import type {
+  CashCollection,
   CreditDebt,
   InstallmentItem,
   InstallmentPlan,
@@ -245,12 +246,41 @@ export async function fetchStockMovementsPage(
   };
 }
 
+export async function fetchCashCollections(): Promise<CashCollection[]> {
+  const db = await getDb();
+  const rows = await db.select<
+    {
+      id: string;
+      amount: number;
+      paid_at: number;
+      source_kind: string;
+      source_id: string;
+      customer_name: string;
+      note: string | null;
+    }[]
+  >(
+    `SELECT id, amount, paid_at, source_kind, source_id, customer_name, note
+     FROM cash_collections ORDER BY paid_at DESC`,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    amount: r.amount,
+    paidAt: r.paid_at,
+    sourceKind: r.source_kind,
+    sourceId: r.source_id,
+    customerName: r.customer_name,
+    note: r.note,
+  }));
+}
+
 export async function fetchDashboardBundle(): Promise<{
   products: Product[];
   sales: Sale[];
   stockMovements: StockMovement[];
+  cashCollections: CashCollection[];
 }> {
-  const [products, sales, movRows] = await Promise.all([
+  const [products, sales, movRows, cashCollections] = await Promise.all([
     fetchAllProducts(),
     fetchSalesBundle(),
     (async () => {
@@ -270,6 +300,7 @@ export async function fetchDashboardBundle(): Promise<{
          FROM stock_movements ORDER BY created_at DESC`,
       );
     })(),
+    fetchCashCollections(),
   ]);
 
   const pmap = new Map(products.map((p) => [p.id, p]));
@@ -283,7 +314,7 @@ export async function fetchDashboardBundle(): Promise<{
     product: pmap.get(r.product_id) ?? null,
   }));
 
-  return { products, sales, stockMovements };
+  return { products, sales, stockMovements, cashCollections };
 }
 
 export async function fetchInstallmentsBundle(): Promise<InstallmentPlan[]> {

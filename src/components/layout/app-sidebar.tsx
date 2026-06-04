@@ -18,22 +18,33 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { isAdminRole, ROLES } from "@/lib/constants";
+import { isSuperAdminRole } from "@/lib/constants";
 import { useShopSession } from "@/context/shop-session";
 
 const nav: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  adminOnly?: boolean;
+  superAdminOnly?: boolean;
 }[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    superAdminOnly: true,
+  },
   { href: "/products", label: "Products", icon: Package },
   { href: "/sales", label: "Sales", icon: ShoppingCart },
   { href: "/installments", label: "Installments", icon: CalendarClock },
   { href: "/pay-later", label: "Pay later", icon: Handshake },
   { href: "/inventory", label: "Inventory", icon: Warehouse },
-  { href: "/reports", label: "Reports", icon: BarChart3, adminOnly: true },
+  {
+    href: "/reports",
+    label: "Reports",
+    icon: BarChart3,
+    superAdminOnly: true,
+  },
+  { href: "/team", label: "Team", icon: Users, superAdminOnly: true },
 ];
 
 export function AppSidebar({
@@ -50,7 +61,7 @@ export function AppSidebar({
   const pathname = useLocation().pathname;
   const { profile } = useShopSession();
   const visibleNav = nav.filter(
-    (item) => !item.adminOnly || isAdminRole(profile?.role),
+    (item) => !item.superAdminOnly || isSuperAdminRole(profile?.role),
   );
 
   return (
@@ -145,11 +156,6 @@ export function AppSidebar({
             </Link>
           );
         })}
-        <SuperAdminTeamNavLink
-          collapsed={collapsed}
-          pathname={pathname}
-          onNavClick={onNavClick}
-        />
       </nav>
       {!collapsed ? (
         <div className="mt-auto border-t border-border/80 p-4">
@@ -160,56 +166,6 @@ export function AppSidebar({
         </div>
       ) : null}
     </aside>
-  );
-}
-
-function SuperAdminTeamNavLink({
-  collapsed,
-  pathname,
-  onNavClick,
-}: {
-  collapsed: boolean;
-  pathname: string;
-  onNavClick?: () => void;
-}) {
-  const { profile } = useShopSession();
-  if (profile?.role !== ROLES.super_admin) return null;
-
-  const href = "/team";
-  const active = pathname === href || pathname.startsWith(`${href}/`);
-  const Icon = Users;
-
-  return (
-    <Link
-      to={href}
-      onClick={() => onNavClick?.()}
-      className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-    >
-      <span
-        className={cn(
-          "relative flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200",
-          active
-            ? "bg-primary/12 text-foreground shadow-sm dark:bg-primary/15"
-            : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
-          collapsed && "justify-center px-0",
-        )}
-      >
-        {active ? (
-          <span
-            className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-full bg-primary"
-            aria-hidden
-          />
-        ) : null}
-        <Icon
-          className={cn(
-            "size-5 shrink-0",
-            active ? "text-primary" : undefined,
-          )}
-          aria-hidden
-        />
-        {!collapsed && "Team"}
-      </span>
-    </Link>
   );
 }
 

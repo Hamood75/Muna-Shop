@@ -5,7 +5,7 @@ import { AppProviders } from "@/providers/app-providers";
 import { ShopSessionProvider, useShopSession } from "@/context/shop-session";
 import { LoadingState } from "@/components/loading-state";
 import { ShopShell } from "@/components/layout/shop-shell";
-import { isAdminRole } from "@/lib/constants";
+import { isSuperAdminRole } from "@/lib/constants";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { ProductsPage } from "@/pages/products-page";
 import { SalesPage } from "@/pages/sales-page";
@@ -79,10 +79,20 @@ function ShopLayoutRoute() {
   );
 }
 
-function RequireAdmin({ children }: { children: React.ReactElement }) {
+function HomeRedirect() {
   const { profile } = useShopSession();
-  if (!isAdminRole(profile?.role)) {
-    return <Navigate to="/dashboard" replace />;
+  return (
+    <Navigate
+      to={isSuperAdminRole(profile?.role) ? "/dashboard" : "/sales"}
+      replace
+    />
+  );
+}
+
+function RequireSuperAdmin({ children }: { children: React.ReactElement }) {
+  const { profile } = useShopSession();
+  if (!isSuperAdminRole(profile?.role)) {
+    return <Navigate to="/sales" replace />;
   }
   return children;
 }
@@ -91,8 +101,15 @@ function AppRoutes() {
   return (
     <Routes>
       <Route element={<ShopLayoutRoute />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route index element={<HomeRedirect />} />
+        <Route
+          path="dashboard"
+          element={
+            <RequireSuperAdmin>
+              <DashboardPage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route path="products" element={<ProductsPage />} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="installments" element={<InstallmentsPage />} />
@@ -101,14 +118,21 @@ function AppRoutes() {
         <Route
           path="reports"
           element={
-            <RequireAdmin>
+            <RequireSuperAdmin>
               <ReportsPage />
-            </RequireAdmin>
+            </RequireSuperAdmin>
           }
         />
-        <Route path="team" element={<TeamPage />} />
+        <Route
+          path="team"
+          element={
+            <RequireSuperAdmin>
+              <TeamPage />
+            </RequireSuperAdmin>
+          }
+        />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<HomeRedirect />} />
     </Routes>
   );
 }

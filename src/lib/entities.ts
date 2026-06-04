@@ -80,3 +80,14 @@ export type CreditDebt = {
   status: string;
   product?: Product | null;
 };
+
+/** Cash received on a specific day from installment or pay-later payments. */
+export type CashCollection = {
+  id: string;
+  amount: number;
+  paidAt: number;
+  sourceKind: string;
+  sourceId: string;
+  customerName: string;
+  note?: string | null;
+};

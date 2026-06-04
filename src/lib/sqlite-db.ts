@@ -113,9 +113,21 @@ const MIGRATIONS: string[] = [
     product_id TEXT NOT NULL REFERENCES products(id)
   );`,
 
+  `CREATE TABLE IF NOT EXISTS cash_collections (
+    id TEXT PRIMARY KEY,
+    amount REAL NOT NULL,
+    paid_at INTEGER NOT NULL,
+    source_kind TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    note TEXT,
+    creator_id TEXT REFERENCES profiles(id)
+  );`,
+
   `CREATE INDEX IF NOT EXISTS idx_products_created ON products(created_at DESC);`,
   `CREATE INDEX IF NOT EXISTS idx_stock_mov_created ON stock_movements(created_at DESC);`,
   `CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at DESC);`,
+  `CREATE INDEX IF NOT EXISTS idx_cash_collections_paid ON cash_collections(paid_at DESC);`,
 
   `CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);`,
 

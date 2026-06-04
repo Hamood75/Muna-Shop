@@ -19,12 +19,13 @@ export function DashboardPage() {
     );
   }
 
-  const d = data ?? { products: [], sales: [], stockMovements: [] };
+  const d = data ?? { products: [], sales: [], stockMovements: [], cashCollections: [] };
   return (
     <DashboardClient
       products={d.products}
       sales={d.sales}
       stockMovements={d.stockMovements}
+      cashCollections={d.cashCollections}
     />
   );
 }

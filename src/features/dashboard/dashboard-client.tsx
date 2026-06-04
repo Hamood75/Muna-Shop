@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { startOfDay, startOfMonth, startOfWeek } from "date-fns";
-import type { Product, Sale, StockMovement, SaleItem } from "@/lib/entities";
+import type { Product, Sale, StockMovement, SaleItem, CashCollection } from "@/lib/entities";
 import {
   AlertTriangle,
   CalendarDays,
@@ -19,6 +19,12 @@ import {
 } from "@/lib/constants";
 import { formatMoney } from "@/lib/format-money";
 import { estimatedNetProfitInRange } from "@/lib/pl-report";
+import {
+  cashTransactionCountInRange,
+  collectionsInRange,
+  grossRevenueInRange,
+  salesInRange,
+} from "@/lib/revenue";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,10 +42,12 @@ export function DashboardClient({
   products,
   sales,
   stockMovements,
+  cashCollections,
 }: {
   products: Product[];
   sales: SaleRow[];
   stockMovements: MovementRow[];
+  cashCollections: CashCollection[];
 }) {
   const [recentSalesPage, setRecentSalesPage] = React.useState(0);
 
@@ -47,15 +55,27 @@ export function DashboardClient({
     const sod = startOfDay(new Date()).getTime();
     const sow = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime();
     const som = startOfMonth(new Date()).getTime();
+    const now = Date.now();
+    const eod = now;
 
-    const salesToday = sales.filter((s) => s.createdAt >= sod);
-    const revenueToday = salesToday.reduce((a, s) => a + s.totalAmount, 0);
+    const revenueToday = grossRevenueInRange(sales, cashCollections, sod, eod);
+    const countToday = cashTransactionCountInRange(
+      sales,
+      cashCollections,
+      sod,
+      eod,
+    );
+    const collectionsToday = collectionsInRange(
+      cashCollections,
+      sod,
+      eod,
+    ).length;
+    const salesTodayCount = salesInRange(sales, sod, eod).length;
 
-    const salesWeek = sales.filter((s) => s.createdAt >= sow);
-    const revenueWeek = salesWeek.reduce((a, s) => a + s.totalAmount, 0);
+    const revenueWeek = grossRevenueInRange(sales, cashCollections, sow, eod);
+    const revenueMonth = grossRevenueInRange(sales, cashCollections, som, eod);
 
     const salesMonth = sales.filter((s) => s.createdAt >= som);
-    const revenueMonth = salesMonth.reduce((a, s) => a + s.totalAmount, 0);
 
     const low = products.filter((p) => isLowStock(p.stockQuantity));
 
@@ -77,18 +97,20 @@ export function DashboardClient({
         qty,
       }));
 
-    const now = Date.now();
+    const nowTs = Date.now();
     const plMonth = estimatedNetProfitInRange(
       sales,
       stockMovements,
       products,
       som,
-      now,
+      nowTs,
     );
 
     return {
       revenueToday,
-      countToday: salesToday.length,
+      countToday,
+      salesTodayCount,
+      collectionsToday,
       revenueWeek,
       revenueMonth,
       lowStock: low.length,
@@ -101,7 +123,7 @@ export function DashboardClient({
       damagedCostMonth: plMonth.damagedAtCost,
       profitEstNet: plMonth.netEstimate,
     };
-  }, [products, sales, stockMovements]);
+  }, [products, sales, stockMovements, cashCollections]);
 
   const recentSorted = stats.recentSalesSorted;
   const rsPageSize = DASHBOARD_RECENT_SALES_PAGE_SIZE;
@@ -129,13 +151,17 @@ export function DashboardClient({
           icon={Coins}
           title="Today's revenue"
           value={formatMoney(stats.revenueToday)}
-          hint={`${stats.countToday} sales`}
+          hint={
+            stats.collectionsToday > 0
+              ? `${stats.salesTodayCount} sales · ${stats.collectionsToday} plan payments`
+              : `${stats.countToday} transactions`
+          }
         />
         <StatCard
           icon={CalendarDays}
           title="This week"
           value={formatMoney(stats.revenueWeek)}
-          hint="Gross sales"
+          hint="Sales + plan payments"
         />
         <StatCard
           icon={AlertTriangle}
@@ -288,6 +314,9 @@ export function DashboardClient({
             <p className="text-sm text-muted-foreground">Monthly revenue</p>
             <p className="text-3xl font-semibold tabular-nums">
               {formatMoney(stats.revenueMonth)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Includes sales and plan payments received this month
             </p>
           </div>
           <div>

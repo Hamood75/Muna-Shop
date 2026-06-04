@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Product } from "@/lib/entities";
 import {
+  CASH_COLLECTION_SOURCE,
   CREDIT_DEBT_STATUS,
   INSTALLMENT_STATUS,
   ROLES,
@@ -47,6 +48,36 @@ function sqlErr(e: unknown): string {
     return "Barcode already exists for another product";
   }
   return msg;
+}
+
+type Db = Awaited<ReturnType<typeof getDb>>;
+
+async function insertCashCollection(
+  db: Db,
+  opts: {
+    amount: number;
+    paidAt: number;
+    sourceKind: string;
+    sourceId: string;
+    customerName: string;
+    note?: string | null;
+    creatorId?: string | null;
+  },
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO cash_collections (id, amount, paid_at, source_kind, source_id, customer_name, note, creator_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      randomUuid(),
+      opts.amount,
+      opts.paidAt,
+      opts.sourceKind,
+      opts.sourceId,
+      opts.customerName,
+      opts.note ?? null,
+      opts.creatorId ?? null,
+    ],
+  );
 }
 
 export async function recordSaleClient(
@@ -714,6 +745,19 @@ export async function createInstallmentPlanClient(
         ],
       );
     }
+
+    if (initial > 0) {
+      await insertCashCollection(db, {
+        amount: initial,
+        paidAt: now,
+        sourceKind: CASH_COLLECTION_SOURCE.installment,
+        sourceId: planId,
+        customerName: data.customerName.trim(),
+        note: "Initial installment payment",
+        creatorId: profileId,
+      });
+    }
+
     await db.execute("COMMIT");
     return { ok: true, data: { id: planId } };
   } catch (e) {
@@ -962,6 +1006,10 @@ export async function voidInstallmentPlanClient(
       `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'installment'`,
       [planId],
     );
+    await db.execute(
+      `DELETE FROM cash_collections WHERE source_kind = ? AND source_id = ?`,
+      [CASH_COLLECTION_SOURCE.installment, planId],
+    );
     await db.execute(`DELETE FROM installment_plans WHERE id = ?`, [planId]);
 
     await db.execute("COMMIT");
@@ -1012,12 +1060,36 @@ export async function recordInstallmentPaymentClient(
 
   const db = await getDb();
   try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const planRows = await db.select<{ customer_name: string }[]>(
+      "SELECT customer_name FROM installment_plans WHERE id = ? LIMIT 1",
+      [data.planId],
+    );
+    const customerName = planRows[0]?.customer_name ?? "Customer";
+
     await db.execute(
       `UPDATE installment_plans SET paid_so_far = ?, status = ? WHERE id = ?`,
       [nextPaid, nextStatus, data.planId],
     );
+
+    await insertCashCollection(db, {
+      amount: payment,
+      paidAt: Date.now(),
+      sourceKind: CASH_COLLECTION_SOURCE.installment,
+      sourceId: data.planId,
+      customerName,
+      note: "Installment payment",
+    });
+
+    await db.execute("COMMIT");
     return { ok: true };
   } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
     return { ok: false, error: sqlErr(e) };
   }
 }
@@ -1287,6 +1359,10 @@ export async function voidCreditDebtClient(
       `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'pay_later'`,
       [debtId],
     );
+    await db.execute(
+      `DELETE FROM cash_collections WHERE source_kind = ? AND source_id = ?`,
+      [CASH_COLLECTION_SOURCE.payLater, debtId],
+    );
     await db.execute(`DELETE FROM credit_debts WHERE id = ?`, [debtId]);
 
     await db.execute("COMMIT");
@@ -1337,12 +1413,36 @@ export async function recordCreditPaymentClient(
 
   const db = await getDb();
   try {
+    await db.execute("BEGIN IMMEDIATE");
+
+    const debtRows = await db.select<{ customer_name: string }[]>(
+      "SELECT customer_name FROM credit_debts WHERE id = ? LIMIT 1",
+      [data.debtId],
+    );
+    const customerName = debtRows[0]?.customer_name ?? "Customer";
+
     await db.execute(
       `UPDATE credit_debts SET paid_so_far = ?, status = ? WHERE id = ?`,
       [nextPaid, nextStatus, data.debtId],
     );
+
+    await insertCashCollection(db, {
+      amount: payment,
+      paidAt: Date.now(),
+      sourceKind: CASH_COLLECTION_SOURCE.payLater,
+      sourceId: data.debtId,
+      customerName,
+      note: "Pay-later payment",
+    });
+
+    await db.execute("COMMIT");
     return { ok: true };
   } catch (e) {
+    try {
+      await db.execute("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
     return { ok: false, error: sqlErr(e) };
   }
 }

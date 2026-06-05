@@ -1,6 +1,7 @@
 import type {
   CashCollection,
   CreditDebt,
+  CreditDebtItem,
   InstallmentItem,
   InstallmentPlan,
   Product,
@@ -380,35 +381,57 @@ export async function fetchCreditDebtsBundle(): Promise<CreditDebt[]> {
     {
       id: string;
       customer_name: string;
-      quantity: number;
-      unit_price_at_sale: number;
       total_owed: number;
       paid_so_far: number;
       notes: string | null;
       created_at: number;
       status: string;
-      product_id: string;
     }[]
   >(
-    `SELECT id, customer_name, quantity, unit_price_at_sale, total_owed, paid_so_far,
-            notes, created_at, status, product_id
+    `SELECT id, customer_name, total_owed, paid_so_far, notes, created_at, status
      FROM credit_debts ORDER BY created_at DESC`,
   );
 
-  const pmap = await productMapByIds(rows.map((r) => r.product_id));
+  const items = await db.select<
+    {
+      id: string;
+      debt_id: string;
+      product_id: string;
+      quantity: number;
+      unit_price: number;
+      line_total: number;
+    }[]
+  >(
+    "SELECT id, debt_id, product_id, quantity, unit_price, line_total FROM credit_debt_items",
+  );
+
+  const pids = [...new Set(items.map((i) => i.product_id))];
+  const pmap = await productMapByIds(pids);
+
+  const byDebt = new Map<string, CreditDebtItem[]>();
+  for (const i of items) {
+    const row: CreditDebtItem = {
+      id: i.id,
+      productId: i.product_id,
+      quantity: i.quantity,
+      unitPrice: i.unit_price,
+      lineTotal: i.line_total,
+      product: pmap.get(i.product_id) ?? null,
+    };
+    const list = byDebt.get(i.debt_id) ?? [];
+    list.push(row);
+    byDebt.set(i.debt_id, list);
+  }
 
   return rows.map((r) => ({
     id: r.id,
     customerName: r.customer_name,
-    productId: r.product_id,
-    quantity: r.quantity,
-    unitPriceAtSale: r.unit_price_at_sale,
     totalOwed: r.total_owed,
     paidSoFar: r.paid_so_far,
     notes: r.notes,
     createdAt: r.created_at,
     status: r.status,
-    product: pmap.get(r.product_id) ?? null,
+    items: byDebt.get(r.id) ?? [],
   }));
 }
 

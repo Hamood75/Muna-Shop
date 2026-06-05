@@ -595,7 +595,7 @@ export async function deleteProductClient(
     `SELECT
        (SELECT COUNT(*) FROM sale_items WHERE product_id = ?) +
        (SELECT COUNT(*) FROM installment_items WHERE product_id = ?) +
-       (SELECT COUNT(*) FROM credit_debts WHERE product_id = ?) AS n`,
+       (SELECT COUNT(*) FROM credit_debt_items WHERE product_id = ?) AS n`,
     [productId, productId, productId],
   );
   const n = chk[0]?.n ?? 0;
@@ -1097,7 +1097,7 @@ export async function recordInstallmentPaymentClient(
 export async function createCreditDebtClient(
   profileId: string | undefined,
   input: unknown,
-  product: ProductSnapshot,
+  products: ProductSnapshot[],
 ): Promise<ClientTransactResult<{ id: string }>> {
   if (!profileId) {
     return { ok: false, error: "No active profile" };
@@ -1109,63 +1109,108 @@ export async function createCreditDebtClient(
   }
   const data = parsed.data;
 
-  if (data.productId !== product.id) {
-    return { ok: false, error: "Product mismatch" };
-  }
-  if (product.stockQuantity < data.quantity) {
-    return {
-      ok: false,
-      error: `Insufficient stock for "${product.name}"`,
-    };
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const running = new Map<string, number>();
+
+  for (const pid of new Set(data.items.map((i) => i.productId))) {
+    const p = byId.get(pid);
+    if (!p) {
+      return { ok: false, error: `Unknown product: ${pid}` };
+    }
+    running.set(pid, p.stockQuantity);
   }
 
-  const unitPriceAtSale = product.sellingPrice;
-  const defaultTotal = unitPriceAtSale * data.quantity;
-  const totalOwed = data.totalOwed ?? defaultTotal;
+  let catalogTotal = 0;
+  const lineMeta: {
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    nextStock: number;
+  }[] = [];
 
+  for (const line of data.items) {
+    const p = byId.get(line.productId)!;
+    const stock = running.get(line.productId)!;
+    const unitPrice = p.sellingPrice;
+    const lineTotal = unitPrice * line.quantity;
+    if (stock < line.quantity) {
+      return {
+        ok: false,
+        error: `Insufficient stock for "${p.name}"`,
+      };
+    }
+    catalogTotal += lineTotal;
+    const nextStock = stock - line.quantity;
+    running.set(line.productId, nextStock);
+    lineMeta.push({
+      productId: line.productId,
+      quantity: line.quantity,
+      unitPrice,
+      lineTotal,
+      nextStock,
+    });
+  }
+
+  const totalOwed = data.totalOwed ?? catalogTotal;
   const debtId = randomUuid();
-  const movId = randomUuid();
   const now = Date.now();
-  const nextStock = product.stockQuantity - data.quantity;
+  const customer = data.customerName.trim();
 
   const db = await getDb();
 
   try {
     await db.execute("BEGIN IMMEDIATE");
     await db.execute(
-      `INSERT INTO credit_debts (id, customer_name, quantity, unit_price_at_sale, total_owed, paid_so_far, notes, created_at, status, creator_id, product_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO credit_debts (id, customer_name, total_owed, paid_so_far, notes, created_at, status, creator_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         debtId,
-        data.customerName.trim(),
-        data.quantity,
-        unitPriceAtSale,
+        customer,
         totalOwed,
         0,
         data.notes?.trim() || null,
         now,
         CREDIT_DEBT_STATUS.open,
         profileId,
-        data.productId,
       ],
     );
-    await db.execute(
-      `UPDATE products SET stock_quantity = ? WHERE id = ?`,
-      [nextStock, data.productId],
-    );
-    await db.execute(
-      `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        movId,
-        data.productId,
-        "pay_later",
-        -data.quantity,
-        `Pay later · ${data.customerName.trim()}`,
-        now,
-        debtId,
-      ],
-    );
+
+    for (const line of lineMeta) {
+      const itemId = randomUuid();
+      await db.execute(
+        `INSERT INTO credit_debt_items (id, debt_id, product_id, quantity, unit_price, line_total)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          itemId,
+          debtId,
+          line.productId,
+          line.quantity,
+          line.unitPrice,
+          line.lineTotal,
+        ],
+      );
+      await db.execute(
+        `UPDATE products SET stock_quantity = ? WHERE id = ?`,
+        [line.nextStock, line.productId],
+      );
+
+      const movId = randomUuid();
+      await db.execute(
+        `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          movId,
+          line.productId,
+          "pay_later",
+          -line.quantity,
+          `Pay later · ${customer}`,
+          now,
+          debtId,
+        ],
+      );
+    }
+
     await db.execute("COMMIT");
     return { ok: true, data: { id: debtId } };
   } catch (e) {
@@ -1190,7 +1235,7 @@ export async function updateCreditDebtClient(
   if (!parsed.success) {
     return { ok: false, error: zodFirstIssue(parsed.error) };
   }
-  const data = parsed.data;
+  const { debtId, customerName, items, notes } = parsed.data;
 
   const db = await getDb();
   const now = Date.now();
@@ -1198,113 +1243,163 @@ export async function updateCreditDebtClient(
   try {
     await db.execute("BEGIN IMMEDIATE");
 
-    const debtRows = await db.select<
-      {
-        id: string;
-        product_id: string;
-        quantity: number;
-        paid_so_far: number;
-      }[]
-    >(
-      "SELECT id, product_id, quantity, paid_so_far FROM credit_debts WHERE id = ? LIMIT 1",
-      [data.debtId],
+    const debtRows = await db.select<{ id: string; paid_so_far: number }[]>(
+      "SELECT id, paid_so_far FROM credit_debts WHERE id = ? LIMIT 1",
+      [debtId],
     );
     if (!debtRows.length) {
       await db.execute("ROLLBACK");
       return { ok: false, error: "Pay-later record not found" };
     }
-    const old = debtRows[0];
-    const paidSoFarBefore = old.paid_so_far;
+    const paidSoFarBefore = debtRows[0].paid_so_far;
 
-    const productIds = [...new Set([old.product_id, data.productId])];
+    type OldRow = { product_id: string; quantity: number };
+    const oldItems = await db.select<OldRow[]>(
+      "SELECT product_id, quantity FROM credit_debt_items WHERE debt_id = ?",
+      [debtId],
+    );
+
+    const oldQtyByProduct = new Map<string, number>();
+    for (const row of oldItems) {
+      oldQtyByProduct.set(
+        row.product_id,
+        (oldQtyByProduct.get(row.product_id) ?? 0) + row.quantity,
+      );
+    }
+
+    const newProductIds = [...new Set(items.map((i) => i.productId))];
+    const allProductIds = [
+      ...new Set([...oldQtyByProduct.keys(), ...newProductIds]),
+    ];
+    if (!allProductIds.length) {
+      await db.execute("ROLLBACK");
+      return { ok: false, error: "No products in record" };
+    }
+
     type StockRow = {
       id: string;
       name: string;
       selling_price: number;
       stock_quantity: number;
     };
-    const ph = productIds.map(() => "?").join(",");
+    const phAll = allProductIds.map(() => "?").join(",");
     const stockRows = await db.select<StockRow[]>(
-      `SELECT id, name, selling_price, stock_quantity FROM products WHERE id IN (${ph})`,
-      productIds,
+      `SELECT id, name, selling_price, stock_quantity FROM products WHERE id IN (${phAll})`,
+      allProductIds,
     );
-    if (stockRows.length !== productIds.length) {
+    if (stockRows.length !== allProductIds.length) {
       await db.execute("ROLLBACK");
-      return { ok: false, error: "Product no longer exists" };
+      return { ok: false, error: "One or more products no longer exist" };
     }
+
     const productRow = new Map(stockRows.map((r) => [r.id, r]));
 
-    await db.execute(
-      `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
-      [old.quantity, old.product_id],
-    );
-
-    const target = productRow.get(data.productId)!;
-    const returned =
-      old.product_id === data.productId ? old.quantity : 0;
-    const avail = target.stock_quantity + returned;
-
-    if (avail < data.quantity) {
-      await db.execute("ROLLBACK");
-      return {
-        ok: false,
-        error: `Insufficient stock for "${target.name}"`,
-      };
+    const running = new Map<string, number>();
+    for (const pid of newProductIds) {
+      const row = productRow.get(pid)!;
+      const returned = oldQtyByProduct.get(pid) ?? 0;
+      running.set(pid, row.stock_quantity + returned);
     }
 
-    const unitPriceAtSale = target.selling_price;
-    const totalOwed =
-      data.totalOwed ?? unitPriceAtSale * data.quantity;
+    let catalogTotal = 0;
+    const lineMeta: {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      nextStock: number;
+    }[] = [];
+
+    for (const line of items) {
+      const p = productRow.get(line.productId)!;
+      const stockAvail = running.get(line.productId)!;
+      const unitPrice = p.selling_price;
+      const lineTotal = unitPrice * line.quantity;
+      if (stockAvail < line.quantity) {
+        await db.execute("ROLLBACK");
+        return {
+          ok: false,
+          error: `Insufficient stock for "${p.name}"`,
+        };
+      }
+      catalogTotal += lineTotal;
+      const nextStock = stockAvail - line.quantity;
+      running.set(line.productId, nextStock);
+      lineMeta.push({
+        productId: line.productId,
+        quantity: line.quantity,
+        unitPrice,
+        lineTotal,
+        nextStock,
+      });
+    }
+
+    const totalOwed = parsed.data.totalOwed ?? catalogTotal;
     const paidSoFar = Math.min(paidSoFarBefore, totalOwed);
     const status =
       paidSoFar >= totalOwed
         ? CREDIT_DEBT_STATUS.settled
         : CREDIT_DEBT_STATUS.open;
-    const customer = data.customerName.trim();
-    const nextStock = avail - data.quantity;
+    const noteVal = notes?.trim() || null;
+    const customer = customerName.trim();
+
+    for (const [pid, qty] of oldQtyByProduct) {
+      await db.execute(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+        [qty, pid],
+      );
+    }
 
     await db.execute(
       `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'pay_later'`,
-      [data.debtId],
+      [debtId],
     );
+    await db.execute(`DELETE FROM credit_debt_items WHERE debt_id = ?`, [
+      debtId,
+    ]);
 
     await db.execute(
       `UPDATE credit_debts
-       SET customer_name = ?, product_id = ?, quantity = ?, unit_price_at_sale = ?,
-           total_owed = ?, paid_so_far = ?, notes = ?, status = ?
+       SET customer_name = ?, total_owed = ?, paid_so_far = ?, notes = ?, status = ?
        WHERE id = ?`,
-      [
-        customer,
-        data.productId,
-        data.quantity,
-        unitPriceAtSale,
-        totalOwed,
-        paidSoFar,
-        data.notes?.trim() || null,
-        status,
-        data.debtId,
-      ],
+      [customer, totalOwed, paidSoFar, noteVal, status, debtId],
     );
 
-    await db.execute(
-      `UPDATE products SET stock_quantity = ? WHERE id = ?`,
-      [nextStock, data.productId],
-    );
+    for (const line of lineMeta) {
+      const itemId = randomUuid();
+      await db.execute(
+        `INSERT INTO credit_debt_items (id, debt_id, product_id, quantity, unit_price, line_total)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          itemId,
+          debtId,
+          line.productId,
+          line.quantity,
+          line.unitPrice,
+          line.lineTotal,
+        ],
+      );
 
-    const movId = randomUuid();
-    await db.execute(
-      `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        movId,
-        data.productId,
-        "pay_later",
-        -data.quantity,
-        `Pay later · ${customer} · edited`,
-        now,
-        data.debtId,
-      ],
-    );
+      await db.execute(
+        `UPDATE products SET stock_quantity = ? WHERE id = ?`,
+        [line.nextStock, line.productId],
+      );
+
+      const movId = randomUuid();
+      await db.execute(
+        `INSERT INTO stock_movements (id, product_id, kind, quantity_delta, note, created_at, related_sale_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          movId,
+          line.productId,
+          "pay_later",
+          -line.quantity,
+          `Pay later · ${customer} · edited`,
+          now,
+          debtId,
+        ],
+      );
+    }
 
     await db.execute("COMMIT");
     return { ok: true };
@@ -1338,22 +1433,28 @@ export async function voidCreditDebtClient(
   try {
     await db.execute("BEGIN IMMEDIATE");
 
-    const debtRows = await db.select<
-      { id: string; product_id: string; quantity: number }[]
-    >(
-      "SELECT id, product_id, quantity FROM credit_debts WHERE id = ? LIMIT 1",
+    const debtRows = await db.select<{ id: string }[]>(
+      "SELECT id FROM credit_debts WHERE id = ? LIMIT 1",
       [debtId],
     );
     if (!debtRows.length) {
       await db.execute("ROLLBACK");
       return { ok: false, error: "Pay-later record not found" };
     }
-    const old = debtRows[0];
 
-    await db.execute(
-      `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
-      [old.quantity, old.product_id],
+    const oldItems = await db.select<
+      { product_id: string; quantity: number }[]
+    >(
+      "SELECT product_id, quantity FROM credit_debt_items WHERE debt_id = ?",
+      [debtId],
     );
+
+    for (const row of oldItems) {
+      await db.execute(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
+        [row.quantity, row.product_id],
+      );
+    }
 
     await db.execute(
       `DELETE FROM stock_movements WHERE related_sale_id = ? AND kind = 'pay_later'`,

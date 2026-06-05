@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { LoadingState } from "@/components/loading-state";
 import { EmptyState } from "@/components/empty-state";
@@ -22,7 +22,7 @@ export function ProductsPage() {
   const [page, setPage] = React.useState(0);
 
   React.useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 320);
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
     return () => window.clearTimeout(t);
   }, [search]);
 
@@ -30,9 +30,10 @@ export function ProductsPage() {
     setPage(0);
   }, [debouncedSearch]);
 
-  const { isLoading, error, data } = useQuery({
+  const { isLoading, isFetching, error, data } = useQuery({
     queryKey: queryKeys.products(page, debouncedSearch),
     queryFn: () => fetchProductsPage(page, debouncedSearch),
+    placeholderData: keepPreviousData,
   });
 
   const items = data?.items ?? [];
@@ -52,14 +53,22 @@ export function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-[200px] max-w-md flex-1">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          <label
+            htmlFor="products-search"
+            className="mb-1 block text-xs font-medium text-muted-foreground"
+          >
             Search
           </label>
           <Input
-            placeholder="Name or barcode"
+            id="products-search"
+            placeholder="Type a name or barcode, then pause briefly"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
           />
+          {search.trim() !== debouncedSearch ? (
+            <p className="mt-1 text-xs text-muted-foreground">Searching…</p>
+          ) : null}
         </div>
         <Button
           size="lg"
@@ -101,8 +110,8 @@ export function ProductsPage() {
           <div className="flex flex-col gap-3 border-t border-border/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
               Showing {items.length} of up to {PRODUCTS_PAGE_SIZE} per page
-              {debouncedSearch ? ` · filtered by search` : ""}
-              {isLoading ? " · updating…" : ""}
+              {debouncedSearch ? ` · “${debouncedSearch}”` : ""}
+              {isFetching && !isLoading ? " · updating…" : ""}
             </p>
             <div className="flex items-center gap-2">
               <Button

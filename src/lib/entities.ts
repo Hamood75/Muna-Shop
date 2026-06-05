@@ -67,18 +67,24 @@ export type InstallmentItem = {
   product?: Product | null;
 };
 
+export type CreditDebtItem = {
+  id: string;
+  productId?: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  product?: Product | null;
+};
+
 export type CreditDebt = {
   id: string;
   customerName: string;
-  productId?: string;
-  quantity: number;
-  unitPriceAtSale: number;
   totalOwed: number;
   paidSoFar: number;
   notes?: string | null;
   createdAt: number;
   status: string;
-  product?: Product | null;
+  items?: CreditDebtItem[];
 };
 
 /** Cash received on a specific day from installment or pay-later payments. */

@@ -17,9 +17,16 @@ import type { Product } from "@/lib/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { EditCreditDebtDialog } from "@/features/pay-later/edit-credit-debt-dialog";
 
 type Debt = CreditDebt;
+type DebtFilter = "open" | "paid" | "all";
+
+function isDebtSettled(debt: Debt): boolean {
+  const remaining = Math.max(0, debt.totalOwed - debt.paidSoFar);
+  return debt.status === CREDIT_DEBT_STATUS.settled || remaining <= 0;
+}
 
 export function CreditDebtsList({
   debts,
@@ -28,14 +35,23 @@ export function CreditDebtsList({
   debts: Debt[];
   products: Product[];
 }) {
-  const [filter, setFilter] = React.useState<"open" | "all">("open");
+  const [filter, setFilter] = React.useState<DebtFilter>("open");
+  const [search, setSearch] = React.useState("");
   const [editDebt, setEditDebt] = React.useState<Debt | null>(null);
 
   const filtered = React.useMemo(() => {
     const sorted = [...debts].sort((a, b) => b.createdAt - a.createdAt);
-    if (filter === "all") return sorted;
-    return sorted.filter((d) => d.status === CREDIT_DEBT_STATUS.open);
-  }, [debts, filter]);
+    const byStatus =
+      filter === "all"
+        ? sorted
+        : filter === "paid"
+          ? sorted.filter(isDebtSettled)
+          : sorted.filter((d) => !isDebtSettled(d));
+
+    const q = search.trim().toLowerCase();
+    if (!q) return byStatus;
+    return byStatus.filter((d) => d.customerName.toLowerCase().includes(q));
+  }, [debts, filter, search]);
 
   return (
     <Card>
@@ -47,34 +63,49 @@ export function CreditDebtsList({
           if (!open) setEditDebt(null);
         }}
       />
-      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle className="text-lg">Customer balances</CardTitle>
-        <div className="flex gap-2">
-          {(
-            [
-              ["open", "Open"],
-              ["all", "All"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              className={
-                filter === k
-                  ? "rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-pointer"
-                  : "rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted cursor-pointer"
-              }
-              onClick={() => setFilter(k)}
-            >
-              {label}
-            </button>
-          ))}
+      <CardHeader className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-lg">Customer balances</CardTitle>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["open", "Open"],
+                ["paid", "Paid"],
+                ["all", "All"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={
+                  filter === k
+                    ? "cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                    : "cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                }
+                onClick={() => setFilter(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-2 sm:max-w-md">
+          <Label htmlFor="credit-debt-search">Search customer</Label>
+          <Input
+            id="credit-debt-search"
+            placeholder="Type a customer name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10"
+          />
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No records in this view.
+            {search.trim()
+              ? "No customers match this search in the selected filter."
+              : "No records in this view."}
           </p>
         ) : (
           <ul className="space-y-4">
@@ -115,8 +146,7 @@ function DebtRow({
   });
 
   const remaining = Math.max(0, debt.totalOwed - debt.paidSoFar);
-  const settled =
-    debt.status === CREDIT_DEBT_STATUS.settled || remaining <= 0;
+  const settled = isDebtSettled(debt);
 
   function pay() {
     const n = Number.parseFloat(amount);
@@ -146,15 +176,23 @@ function DebtRow({
           </div>
         </div>
       </div>
-      <div className="mt-2 text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">
-          {debt.product?.name ?? "Product"}
-        </span>
-        {" · "}× {formatQuantityDisplay(debt.quantity)}
-        <span className="tabular-nums">
-          {" "}
-          @ {formatMoney(debt.unitPriceAtSale)}
-        </span>
+      <div className="mt-2 grid gap-1 text-sm text-muted-foreground">
+        {(debt.items ?? []).length === 0 ? (
+          <p>No line items recorded.</p>
+        ) : (
+          (debt.items ?? []).map((item) => (
+            <div
+              key={item.id}
+              className="flex justify-between gap-2 tabular-nums"
+            >
+              <span>
+                {item.product?.name ?? "Product"} ×{" "}
+                {formatQuantityDisplay(item.quantity)}
+              </span>
+              <span>{formatMoney(item.lineTotal)}</span>
+            </div>
+          ))
+        )}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
         <span>

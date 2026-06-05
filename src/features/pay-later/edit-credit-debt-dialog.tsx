@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
-import type { CreditDebt, Product } from "@/lib/entities";
+import type { CreditDebt, CreditDebtItem, Product } from "@/lib/entities";
 import { useShopSession } from "@/context/shop-session";
 import {
   appendSyncHint,
@@ -42,6 +42,43 @@ import {
 } from "@/lib/quantity";
 import { SaleQuantityInput } from "@/components/sale-quantity-input";
 
+type Line = { product: Product; quantity: number };
+
+function productForItem(it: CreditDebtItem, catalog: Product[]): Product | null {
+  const pid = it.productId ?? it.product?.id;
+  if (!pid) return null;
+  const alive = catalog.find((p) => p.id === pid);
+  if (alive) return alive;
+  return {
+    id: pid,
+    name: "Product no longer found — search to replace",
+    barcode: null,
+    buyingPrice: 0,
+    sellingPrice: it.unitPrice,
+    stockQuantity: 0,
+    imageUrl: null,
+    createdAt: 0,
+  };
+}
+
+function linesFromDebt(debt: CreditDebt, catalog: Product[]): Line[] {
+  const grouped = new Map<string, Line>();
+  for (const it of debt.items ?? []) {
+    const p = productForItem(it, catalog);
+    if (!p) continue;
+    const prev = grouped.get(p.id);
+    if (!prev) {
+      grouped.set(p.id, { product: p, quantity: it.quantity });
+    } else {
+      grouped.set(p.id, {
+        product: p,
+        quantity: prev.quantity + it.quantity,
+      });
+    }
+  }
+  return [...grouped.values()];
+}
+
 type Props = {
   debt: CreditDebt | null;
   products: Product[];
@@ -58,8 +95,7 @@ export function EditCreditDebtDialog({
   const { profile } = useShopSession();
   const queryClient = useQueryClient();
   const [customerName, setCustomerName] = React.useState("");
-  const [product, setProduct] = React.useState<Product | null>(null);
-  const [quantity, setQuantity] = React.useState(1);
+  const [lines, setLines] = React.useState<Line[]>([]);
   const [totalOwedStr, setTotalOwedStr] = React.useState("");
   const [totalManual, setTotalManual] = React.useState(false);
   const [notes, setNotes] = React.useState("");
@@ -69,44 +105,28 @@ export function EditCreditDebtDialog({
     if (!open || !debt) return;
     setCustomerName(debt.customerName);
     setNotes(debt.notes?.trim() ?? "");
-    setQuantity(debt.quantity);
+    setLines(linesFromDebt(debt, products));
     setTotalOwedStr(debt.totalOwed.toFixed(2));
     setTotalManual(true);
-    const pid = debt.productId ?? debt.product?.id;
-    const p =
-      (pid ? products.find((x) => x.id === pid) : null) ??
-      debt.product ??
-      (pid
-        ? {
-            id: pid,
-            name: "Product no longer found — search to replace",
-            barcode: null,
-            buyingPrice: 0,
-            sellingPrice: debt.unitPriceAtSale,
-            stockQuantity: 0,
-            imageUrl: null,
-            createdAt: 0,
-          }
-        : null);
-    setProduct(p);
   }, [open, debt, products]);
 
-  const defaultTotal =
-    product != null ? product.sellingPrice * quantity : null;
+  const catalogTotal = lines.reduce(
+    (sum, l) => sum + l.product.sellingPrice * l.quantity,
+    0,
+  );
 
   React.useEffect(() => {
-    if (!open || !product || totalManual) return;
-    if (defaultTotal != null) {
-      setTotalOwedStr(defaultTotal.toFixed(2));
+    if (!open || totalManual) return;
+    if (lines.length) {
+      setTotalOwedStr(catalogTotal.toFixed(2));
     }
-  }, [open, product, defaultTotal, totalManual]);
+  }, [open, lines, catalogTotal, totalManual]);
 
   const updateMut = useMutation({
     mutationFn: (payload: {
       debtId: string;
       customerName: string;
-      productId: string;
-      quantity: number;
+      items: { productId: string; quantity: number }[];
       totalOwed: number;
       notes: string;
     }) => updateCreditDebtClient(profile?.id, payload),
@@ -135,10 +155,27 @@ export function EditCreditDebtDialog({
     },
   });
 
-  function pickProduct(p: Product) {
-    setProduct(p);
-    setTotalManual(false);
-    toast.message(`Product · ${p.name}`, { duration: 1200 });
+  function addProduct(product: Product, qty = 1) {
+    setLines((prev) => {
+      const idx = prev.findIndex((l) => l.product.id === product.id);
+      if (idx === -1) return [...prev, { product, quantity: qty }];
+      const next = [...prev];
+      next[idx] = { ...next[idx], quantity: next[idx].quantity + qty };
+      return next;
+    });
+    toast.message(`Added ${product.name}`, { duration: 1200 });
+  }
+
+  function setQty(productId: string, quantity: number) {
+    if (!isPositiveSaleQuantity(quantity)) {
+      setLines((prev) => prev.filter((l) => l.product.id !== productId));
+      return;
+    }
+    setLines((prev) =>
+      prev.map((l) =>
+        l.product.id === productId ? { ...l, quantity } : l,
+      ),
+    );
   }
 
   function saveEdits() {
@@ -148,16 +185,12 @@ export function EditCreditDebtDialog({
       toast.error("Customer name is required");
       return;
     }
-    if (!product) {
-      toast.error("Choose a product");
+    if (!lines.length) {
+      toast.error("Leave at least one product, or remove this record");
       return;
     }
-    if (!products.some((p) => p.id === product.id)) {
-      toast.error("Replace the product using search above");
-      return;
-    }
-    if (!isPositiveSaleQuantity(quantity)) {
-      toast.error("Quantity must be greater than zero (e.g. 0.5, 1.25)");
+    if (lines.some((l) => !products.some((p) => p.id === l.product.id))) {
+      toast.error("Replace missing products using search above");
       return;
     }
     const owed = Number.parseFloat(totalOwedStr);
@@ -168,8 +201,10 @@ export function EditCreditDebtDialog({
     updateMut.mutate({
       debtId: debt.id,
       customerName: name,
-      productId: product.id,
-      quantity,
+      items: lines.map((l) => ({
+        productId: l.product.id,
+        quantity: l.quantity,
+      })),
       totalOwed: owed,
       notes,
     });
@@ -187,7 +222,7 @@ export function EditCreditDebtDialog({
           <DialogHeader>
             <DialogTitle>Edit pay-later record</DialogTitle>
             <DialogDescription>
-              Fix customer, product, quantity, or amount owed. Payments already
+              Fix customer, products, quantities, or amount owed. Payments already
               recorded are kept (capped if the new balance is lower).
             </DialogDescription>
             {debt ? (
@@ -228,87 +263,110 @@ export function EditCreditDebtDialog({
 
               <ProductScanCombo
                 products={products}
-                onPick={(p) => pickProduct(p)}
+                onPick={(p) => addProduct(p, 1)}
                 autoFocus={false}
                 id="edit-credit-scan"
-                label="Product"
-                placeholder="Scan barcode to add — or type product name and pick from the list"
+                label="Add or fix products"
+                placeholder="Scan or search to add more products"
               />
               <Separator />
 
-              {product ? (
-                <div className="rounded-lg border border-border bg-muted/40 p-4">
-                  <div className="font-medium">{product.name}</div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>
-                      List price {formatMoney(product.sellingPrice)} · stock{" "}
-                      {products.find((p) => p.id === product.id)?.stockQuantity ??
-                        product.stockQuantity}
-                    </span>
-                    {isLowStock(
-                      products.find((p) => p.id === product.id)?.stockQuantity ??
-                        product.stockQuantity,
-                    ) ? (
-                      <Badge variant="warning" className="text-[10px] uppercase">
-                        Low stock
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Quantity</span>
-                    <Button
-                      type="button"
-                      size="lg"
-                      variant="outline"
-                      disabled={busy}
-                      aria-label="Decrease quantity"
-                      onClick={() =>
-                        setQuantity((q) => {
-                          const next = bumpSaleQuantity(q, -1);
-                          return isPositiveSaleQuantity(next) ? next : q;
-                        })
-                      }
-                    >
-                      <Minus className="size-5" />
-                    </Button>
-                    <SaleQuantityInput
-                      value={quantity}
-                      disabled={busy}
-                      onChange={setQuantity}
-                    />
-                    <Button
-                      type="button"
-                      size="lg"
-                      variant="outline"
-                      disabled={busy}
-                      aria-label="Increase quantity"
-                      onClick={() =>
-                        setQuantity((q) => bumpSaleQuantity(q, 1))
-                      }
-                    >
-                      <Plus className="size-5" />
-                    </Button>
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    <Label htmlFor="edit-credit-total">Amount owed</Label>
-                    <Input
-                      id="edit-credit-total"
-                      className="max-w-xs tabular-nums"
-                      inputMode="decimal"
-                      value={totalOwedStr}
-                      disabled={busy}
-                      onChange={(e) => {
-                        setTotalManual(true);
-                        setTotalOwedStr(e.target.value);
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : (
+              {lines.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Pick a product above.
+                  No products — add above or remove this record.
                 </p>
+              ) : (
+                <ul className="space-y-4">
+                  {lines.map((line) => {
+                    const live = products.find((p) => p.id === line.product.id);
+                    const stockShown =
+                      live?.stockQuantity ?? line.product.stockQuantity;
+                    return (
+                      <li
+                        key={line.product.id}
+                        className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 p-3"
+                      >
+                        <div className="min-w-[140px] flex-1">
+                          <div className="font-medium">{line.product.name}</div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span>
+                              {formatMoney(line.product.sellingPrice)} each · stock{" "}
+                              {stockShown}
+                            </span>
+                            {isLowStock(stockShown) ? (
+                              <Badge
+                                variant="warning"
+                                className="text-[10px] uppercase"
+                              >
+                                Low stock
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="lg"
+                            variant="outline"
+                            disabled={busy}
+                            aria-label="Decrease quantity"
+                            onClick={() =>
+                              setQty(
+                                line.product.id,
+                                bumpSaleQuantity(line.quantity, -1),
+                              )
+                            }
+                          >
+                            <Minus className="size-5" />
+                          </Button>
+                          <SaleQuantityInput
+                            value={line.quantity}
+                            disabled={busy}
+                            onChange={(q) => setQty(line.product.id, q)}
+                          />
+                          <Button
+                            type="button"
+                            size="lg"
+                            variant="outline"
+                            disabled={busy}
+                            aria-label="Increase quantity"
+                            onClick={() =>
+                              setQty(
+                                line.product.id,
+                                bumpSaleQuantity(line.quantity, 1),
+                              )
+                            }
+                          >
+                            <Plus className="size-5" />
+                          </Button>
+                        </div>
+                        <div className="w-full text-right font-semibold tabular-nums sm:w-auto">
+                          {formatMoney(line.product.sellingPrice * line.quantity)}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-credit-total">Amount owed</Label>
+                <Input
+                  id="edit-credit-total"
+                  className="max-w-xs tabular-nums"
+                  inputMode="decimal"
+                  value={totalOwedStr}
+                  disabled={busy || !lines.length}
+                  onChange={(e) => {
+                    setTotalManual(true);
+                    setTotalOwedStr(e.target.value);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Catalog total {formatMoney(catalogTotal)} — edit if the agreed
+                  balance differs.
+                </p>
+              </div>
             </div>
           ) : null}
 
@@ -325,7 +383,7 @@ export function EditCreditDebtDialog({
               type="button"
               size="lg"
               className="min-h-11"
-              disabled={busy || !product || updateMut.isPending}
+              disabled={busy || !lines.length || updateMut.isPending}
               onClick={() => saveEdits()}
             >
               {updateMut.isPending ? "Saving…" : "Save changes"}

@@ -36,12 +36,8 @@ export const updateInstallmentPlanSchema = z.object({
 
 export const createCreditDebtSchema = z.object({
   customerName: z.string().trim().min(1).max(200),
-  productId: z.string().min(1),
-  quantity: z.coerce
-    .number()
-    .positive("Quantity must be greater than zero")
-    .max(1_000_000),
-  /** If omitted, server uses quantity × current selling price. */
+  items: z.array(saleLineSchema).min(1),
+  /** If omitted, server uses sum of line totals at current selling prices. */
   totalOwed: z.coerce.number().positive().optional(),
   notes: z.string().optional(),
 });
@@ -54,11 +50,7 @@ export const recordCreditPaymentSchema = z.object({
 export const updateCreditDebtSchema = z.object({
   debtId: z.string().min(1),
   customerName: z.string().trim().min(1).max(200),
-  productId: z.string().min(1),
-  quantity: z.coerce
-    .number()
-    .positive("Quantity must be greater than zero")
-    .max(1_000_000),
+  items: z.array(saleLineSchema).min(1),
   totalOwed: z.coerce.number().positive().optional(),
   notes: z.string().optional(),
 });

@@ -14,7 +14,6 @@ type DayGroup = {
   dateKey: string;
   label: string;
   sales: Sale[];
-  total: number;
 };
 
 function groupSalesByDay(sales: Sale[], rangeMs: number | null): DayGroup[] {
@@ -40,7 +39,6 @@ function groupSalesByDay(sales: Sale[], rangeMs: number | null): DayGroup[] {
           ? dateKey
           : format(d, "EEEE, MMM d, yyyy"),
         sales: sorted,
-        total: sorted.reduce((sum, s) => sum + s.totalAmount, 0),
       };
     });
 }
@@ -130,9 +128,6 @@ export function SalesHistory({
           <>
             <div className="rounded-xl border border-border bg-gradient-to-br from-muted/40 to-muted/10 p-4">
               <p className="text-sm font-medium">{activeDay.label}</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">
-                {formatMoney(activeDay.total)}
-              </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {activeDay.sales.length}{" "}
                 {activeDay.sales.length === 1 ? "sale" : "sales"} this day

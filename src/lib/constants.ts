@@ -17,9 +17,6 @@ export const DASHBOARD_RECENT_SALES_PAGE_SIZE = 3;
 /** Reports "Sales by date" list (super admin) */
 export const REPORTS_SALES_BY_DATE_PAGE_SIZE = 20;
 
-/** Installment / pay-later payment history list */
-export const PLAN_PAYMENTS_PAGE_SIZE = 20;
-
 export const ROLES = {
   super_admin: "super_admin",
   admin: "admin",

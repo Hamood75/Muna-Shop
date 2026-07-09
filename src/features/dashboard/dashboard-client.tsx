@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { startOfDay, startOfMonth, startOfWeek } from "date-fns";
-import type { Product, Sale, StockMovement, SaleItem, CashCollection } from "@/lib/entities";
+import type { Product, Sale, StockMovement, SaleItem, CashCollection, InstallmentPlan, CreditDebt } from "@/lib/entities";
 import {
   AlertTriangle,
   CalendarDays,
@@ -43,11 +43,15 @@ export function DashboardClient({
   sales,
   stockMovements,
   cashCollections,
+  installmentPlans,
+  creditDebts,
 }: {
   products: Product[];
   sales: SaleRow[];
   stockMovements: MovementRow[];
   cashCollections: CashCollection[];
+  installmentPlans: InstallmentPlan[];
+  creditDebts: CreditDebt[];
 }) {
   const [recentSalesPage, setRecentSalesPage] = React.useState(0);
 
@@ -104,6 +108,7 @@ export function DashboardClient({
       products,
       som,
       nowTs,
+      { cashCollections, installmentPlans, creditDebts },
     );
 
     return {
@@ -123,7 +128,7 @@ export function DashboardClient({
       damagedCostMonth: plMonth.damagedAtCost,
       profitEstNet: plMonth.netEstimate,
     };
-  }, [products, sales, stockMovements, cashCollections]);
+  }, [products, sales, stockMovements, cashCollections, installmentPlans, creditDebts]);
 
   const recentSorted = stats.recentSalesSorted;
   const rsPageSize = DASHBOARD_RECENT_SALES_PAGE_SIZE;
@@ -321,10 +326,13 @@ export function DashboardClient({
           </div>
           <div>
             <p className="text-sm text-muted-foreground">
-              Est. gross profit from sales (month)
+              Est. gross profit (month)
             </p>
             <p className="text-3xl font-semibold tabular-nums">
               {formatMoney(stats.grossProfitSalesMonth)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sales and plan payments received this month
             </p>
           </div>
           <div>

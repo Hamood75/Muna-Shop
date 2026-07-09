@@ -280,8 +280,17 @@ export async function fetchDashboardBundle(): Promise<{
   sales: Sale[];
   stockMovements: StockMovement[];
   cashCollections: CashCollection[];
+  installmentPlans: InstallmentPlan[];
+  creditDebts: CreditDebt[];
 }> {
-  const [products, sales, movRows, cashCollections] = await Promise.all([
+  const [
+    products,
+    sales,
+    movRows,
+    cashCollections,
+    installmentPlans,
+    creditDebts,
+  ] = await Promise.all([
     fetchAllProducts(),
     fetchSalesBundle(),
     (async () => {
@@ -302,6 +311,8 @@ export async function fetchDashboardBundle(): Promise<{
       );
     })(),
     fetchCashCollections(),
+    fetchInstallmentsBundle(),
+    fetchCreditDebtsBundle(),
   ]);
 
   const pmap = new Map(products.map((p) => [p.id, p]));
@@ -315,7 +326,14 @@ export async function fetchDashboardBundle(): Promise<{
     product: pmap.get(r.product_id) ?? null,
   }));
 
-  return { products, sales, stockMovements, cashCollections };
+  return {
+    products,
+    sales,
+    stockMovements,
+    cashCollections,
+    installmentPlans,
+    creditDebts,
+  };
 }
 
 export async function fetchInstallmentsBundle(): Promise<InstallmentPlan[]> {

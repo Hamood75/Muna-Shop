@@ -19,6 +19,8 @@ export function ReportsExportTab({
   cashCollections,
   stockMovements,
   products,
+  installmentPlans,
+  creditDebts,
 }: ReportsData) {
   const periods = React.useMemo(() => {
     const now = Date.now();
@@ -26,6 +28,11 @@ export function ReportsExportTab({
     const week = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime();
     const month = startOfMonth(new Date()).getTime();
     const window7 = subDays(new Date(), 7).getTime();
+    const planContext = {
+      cashCollections,
+      installmentPlans,
+      creditDebts,
+    };
 
     function periodMetrics(label: string, from: number) {
       const revenue = grossRevenueInRange(sales, cashCollections, from, now);
@@ -41,6 +48,7 @@ export function ReportsExportTab({
         products,
         from,
         now,
+        planContext,
       );
       return {
         label,
@@ -58,7 +66,7 @@ export function ReportsExportTab({
       periodMetrics("This month", month),
       periodMetrics("Rolling 7 days", window7),
     ];
-  }, [sales, cashCollections, stockMovements, products]);
+  }, [sales, cashCollections, stockMovements, products, installmentPlans, creditDebts]);
 
   const sortedSales = React.useMemo(
     () => [...sales].sort((a, b) => a.createdAt - b.createdAt),

@@ -1,4 +1,13 @@
-import type { Product, Sale, SaleItem, StockMovement } from "@/lib/entities";
+import type {
+  CashCollection,
+  CreditDebt,
+  InstallmentPlan,
+  Product,
+  Sale,
+  SaleItem,
+  StockMovement,
+} from "@/lib/entities";
+import { CASH_COLLECTION_SOURCE } from "@/lib/constants";
 
 export type ProductPL = Product;
 
@@ -12,6 +21,27 @@ export type SalePL = Sale & {
 
 export type StockMovementPL = StockMovement & {
   product?: Product | null;
+};
+
+export type PlanLinePL = {
+  productId?: string;
+  quantity: number;
+  unitPrice: number;
+  product?: ProductPL | null;
+};
+
+export type InstallmentPlanPL = Pick<InstallmentPlan, "id" | "totalAmount"> & {
+  items?: PlanLinePL[];
+};
+
+export type CreditDebtPL = Pick<CreditDebt, "id" | "totalOwed"> & {
+  items?: PlanLinePL[];
+};
+
+export type PlanProfitContext = {
+  cashCollections: CashCollection[];
+  installmentPlans: InstallmentPlanPL[];
+  creditDebts: CreditDebtPL[];
 };
 
 /** Margin + damaged exposure for one SKU in a date window. */
@@ -219,6 +249,54 @@ export function damagedInventoryCostInRange(
   return loss;
 }
 
+function planLinesGrossProfit(
+  lines: PlanLinePL[],
+  catalog: ProductPL[],
+): number {
+  let total = 0;
+  for (const item of lines) {
+    const p =
+      item.product ??
+      (item.productId ? catalog.find((x) => x.id === item.productId) : undefined);
+    if (!p) continue;
+    total += item.quantity * (item.unitPrice - p.buyingPrice);
+  }
+  return total;
+}
+
+/** Margin recognized on payment date: payment share × plan line gross profit. */
+export function planPaymentGrossProfitInRange(
+  collections: CashCollection[],
+  installmentPlans: InstallmentPlanPL[],
+  creditDebts: CreditDebtPL[],
+  products: ProductPL[],
+  rangeStart: number,
+  rangeEnd: number,
+): number {
+  const installmentById = new Map(
+    installmentPlans.map((p) => [p.id, p] as const),
+  );
+  const debtById = new Map(creditDebts.map((d) => [d.id, d] as const));
+
+  let total = 0;
+  for (const c of collections) {
+    if (c.paidAt < rangeStart || c.paidAt > rangeEnd) continue;
+
+    if (c.sourceKind === CASH_COLLECTION_SOURCE.installment) {
+      const plan = installmentById.get(c.sourceId);
+      if (!plan || plan.totalAmount <= 0) continue;
+      const planProfit = planLinesGrossProfit(plan.items ?? [], products);
+      total += (c.amount / plan.totalAmount) * planProfit;
+    } else if (c.sourceKind === CASH_COLLECTION_SOURCE.payLater) {
+      const debt = debtById.get(c.sourceId);
+      if (!debt || debt.totalOwed <= 0) continue;
+      const planProfit = planLinesGrossProfit(debt.items ?? [], products);
+      total += (c.amount / debt.totalOwed) * planProfit;
+    }
+  }
+  return total;
+}
+
 /** Gross profit from sales minus damaged inventory at cost (same window). */
 export function estimatedNetProfitInRange(
   sales: SalePL[],
@@ -226,17 +304,29 @@ export function estimatedNetProfitInRange(
   products: ProductPL[],
   rangeStart: number,
   rangeEnd: number,
+  planContext?: PlanProfitContext,
 ): {
   grossFromSales: number;
   damagedAtCost: number;
   netEstimate: number;
 } {
-  const grossFromSales = grossProfitFromSalesInRange(
+  const grossFromPosSales = grossProfitFromSalesInRange(
     sales,
     products,
     rangeStart,
     rangeEnd,
   );
+  const grossFromPlanPayments = planContext
+    ? planPaymentGrossProfitInRange(
+        planContext.cashCollections,
+        planContext.installmentPlans,
+        planContext.creditDebts,
+        products,
+        rangeStart,
+        rangeEnd,
+      )
+    : 0;
+  const grossFromSales = grossFromPosSales + grossFromPlanPayments;
   const damagedAtCost = damagedInventoryCostInRange(
     movements,
     products,

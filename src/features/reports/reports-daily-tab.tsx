@@ -30,6 +30,8 @@ export function ReportsDailyTab({
   cashCollections,
   stockMovements,
   products,
+  installmentPlans,
+  creditDebts,
 }: ReportsData) {
   const [salesDate, setSalesDate] = React.useState(() =>
     format(new Date(), "yyyy-MM-dd"),
@@ -104,6 +106,7 @@ export function ReportsDailyTab({
       products,
       dateBounds.start,
       dateBounds.end,
+      { cashCollections, installmentPlans, creditDebts },
     );
     return {
       revenue,
@@ -112,7 +115,15 @@ export function ReportsDailyTab({
       damagedAtCost: pl.damagedAtCost,
       netEstimate: pl.netEstimate,
     };
-  }, [sales, cashCollections, stockMovements, products, dateBounds]);
+  }, [
+    sales,
+    cashCollections,
+    stockMovements,
+    products,
+    installmentPlans,
+    creditDebts,
+    dateBounds,
+  ]);
 
   const pageSize = REPORTS_SALES_BY_DATE_PAGE_SIZE;
   const pageCount = Math.max(1, Math.ceil(entries.length / pageSize));

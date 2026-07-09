@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import type { Product } from "@/lib/entities";
 import { useShopSession } from "@/context/shop-session";
 import {
@@ -65,6 +65,10 @@ export function NewSalePanel({ products }: { products: Product[] }) {
         l.product.id === productId ? { ...l, quantity } : l,
       ),
     );
+  }
+
+  function removeLine(productId: string) {
+    setLines((prev) => prev.filter((l) => l.product.id !== productId));
   }
 
   const subtotal = lines.reduce(
@@ -161,6 +165,16 @@ export function NewSalePanel({ products }: { products: Product[] }) {
                     }
                   >
                     <Plus className="size-5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 text-destructive hover:text-destructive [&_svg]:size-5"
+                    aria-label="Remove line"
+                    onClick={() => removeLine(line.product.id)}
+                  >
+                    <Trash2 className="size-5" />
                   </Button>
                 </div>
                 <div className="w-full text-right text-base font-semibold tabular-nums sm:w-auto">

@@ -21,13 +21,22 @@ export function ReportsPage() {
     );
   }
 
-  const d = data ?? { products: [], sales: [], stockMovements: [], cashCollections: [] };
+  const d = data ?? {
+    products: [],
+    sales: [],
+    stockMovements: [],
+    cashCollections: [],
+    installmentPlans: [],
+    creditDebts: [],
+  };
   return (
     <ReportsClient
       sales={d.sales}
       products={d.products}
       stockMovements={d.stockMovements}
       cashCollections={d.cashCollections}
+      installmentPlans={d.installmentPlans}
+      creditDebts={d.creditDebts}
     />
   );
 }

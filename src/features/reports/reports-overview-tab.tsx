@@ -23,6 +23,8 @@ function usePeriodMetrics({
   cashCollections,
   stockMovements,
   products,
+  installmentPlans,
+  creditDebts,
 }: ReportsData): PeriodMetrics[] {
   return React.useMemo(() => {
     const now = Date.now();
@@ -30,6 +32,11 @@ function usePeriodMetrics({
     const week = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime();
     const month = startOfMonth(new Date()).getTime();
     const window7 = subDays(new Date(), 7).getTime();
+    const planContext = {
+      cashCollections,
+      installmentPlans,
+      creditDebts,
+    };
 
     function periodMetrics(label: string, from: number): PeriodMetrics {
       const revenue = grossRevenueInRange(sales, cashCollections, from, now);
@@ -45,6 +52,7 @@ function usePeriodMetrics({
         products,
         from,
         now,
+        planContext,
       );
       return {
         label,
@@ -62,7 +70,7 @@ function usePeriodMetrics({
       periodMetrics("This month", month),
       periodMetrics("Rolling 7 days", window7),
     ];
-  }, [sales, cashCollections, stockMovements, products]);
+  }, [sales, cashCollections, stockMovements, products, installmentPlans, creditDebts]);
 }
 
 function StatTile({

@@ -1,5 +1,7 @@
 import type { CashCollection } from "@/lib/entities";
 import type {
+  CreditDebtPL,
+  InstallmentPlanPL,
   ProductPL,
   SalePL,
   StockMovementPL,
@@ -29,6 +31,8 @@ export type ReportsData = {
   products: ProductPL[];
   stockMovements: StockMovementPL[];
   cashCollections: CashCollection[];
+  installmentPlans: InstallmentPlanPL[];
+  creditDebts: CreditDebtPL[];
 };
 
 export const selectLikeClass =
